@@ -217,7 +217,13 @@ main {
   letter-spacing: -0.02em;
 }
 .hero-sub { color: var(--text-faint); font-size: 0.8rem; margin-top: 0.35rem; }
-.sparkline-lg { margin-top: 0.9rem; width: 100%; }
+.sparkline-wrap {
+  position: relative;
+  width: 100%;
+  height: 90px;
+  margin-top: 0.9rem;
+}
+.sparkline-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
 
 .interpretation {
   font-size: 0.78rem;
