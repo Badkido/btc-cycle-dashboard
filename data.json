@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-08-23T00:59:15.647857+00:00",
+  "generated_at": "2026-08-23T07:02:14.005409+00:00",
   "mvrv_z": {
-    "value": 0.6907,
-    "asof": "2026-08-21",
+    "value": 0.8611,
+    "asof": "2026-08-22",
     "source": "bitcoin-data.com",
     "extra": {
-      "mvrv_ratio": 1.4765,
+      "mvrv_ratio": 1.4514,
       "history": [
         [
           "2022-08-23",
@@ -426,10 +426,6 @@
         [
           "2024-08-20",
           1.5681
-        ],
-        [
-          "2024-08-22",
-          1.6364
         ],
         [
           "2024-08-23",
@@ -3346,14 +3342,18 @@
         [
           "2026-08-21",
           0.6907
+        ],
+        [
+          "2026-08-22",
+          0.8611
         ]
       ]
     },
     "stale": false
   },
   "realized_price": {
-    "value": 52368.57,
-    "asof": "2026-08-21",
+    "value": 52414.85,
+    "asof": "2026-08-22",
     "source": "bitcoin-data.com",
     "stale": false
   },
@@ -3364,13 +3364,13 @@
     "stale": false
   },
   "price": {
-    "value": 77320,
+    "value": 76073,
     "asof": "2026-08-23",
     "source": "coingecko",
     "extra": {
       "ath": 126080,
       "ath_date": "2025-10-06",
-      "drawdown_from_ath": -0.3867
+      "drawdown_from_ath": -0.3966
     },
     "stale": false
   },
@@ -3380,12 +3380,12 @@
     "source": "computed",
     "extra": {
       "percentile": 0.2721,
-      "dvol_fallback": 42.34
+      "dvol_fallback": 42.45
     },
     "stale": false
   },
   "volume": {
-    "value": 36150281510,
+    "value": 29474073801,
     "asof": "2026-08-23",
     "source": "coingecko",
     "extra": {
@@ -3423,11 +3423,11 @@
       "stale": false
     },
     "gold": {
-      "value": 4624.1,
+      "value": 4680.6,
       "asof": "2026-08-21",
       "source": "yfinance:GC=F",
       "extra": {
-        "btc_gold_ratio": 16.7211
+        "btc_gold_ratio": 16.2528
       },
       "stale": false
     }
@@ -3452,7 +3452,7 @@
       "asof": "2026-08-22"
     },
     "dvol": {
-      "value": 42.34,
+      "value": 42.45,
       "asof": "2026-08-23"
     }
   }
