@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-08-23T00:30:40.784988+00:00",
+  "generated_at": "2026-08-23T00:59:15.647857+00:00",
   "mvrv_z": {
     "value": 0.6907,
     "asof": "2026-08-21",
     "source": "bitcoin-data.com",
     "extra": {
-      "mvrv_ratio": 1.4742,
+      "mvrv_ratio": 1.4765,
       "history": [
         [
           "2022-08-23",
@@ -3364,13 +3364,13 @@
     "stale": false
   },
   "price": {
-    "value": 77204,
+    "value": 77320,
     "asof": "2026-08-23",
     "source": "coingecko",
     "extra": {
       "ath": 126080,
       "ath_date": "2025-10-06",
-      "drawdown_from_ath": -0.3877
+      "drawdown_from_ath": -0.3867
     },
     "stale": false
   },
@@ -3380,12 +3380,12 @@
     "source": "computed",
     "extra": {
       "percentile": 0.2721,
-      "dvol_fallback": 42.36
+      "dvol_fallback": 42.34
     },
     "stale": false
   },
   "volume": {
-    "value": 36313991361,
+    "value": 36150281510,
     "asof": "2026-08-23",
     "source": "coingecko",
     "extra": {
@@ -3405,29 +3405,29 @@
   },
   "macro": {
     "nominal_10y": {
-      "value": null,
-      "asof": null,
+      "value": 4.69,
+      "asof": "2026-08-20",
       "source": "fred:DGS10",
-      "stale": true
+      "stale": false
     },
     "real_10y": {
-      "value": null,
-      "asof": null,
+      "value": 2.35,
+      "asof": "2026-08-20",
       "source": "fred:DFII10",
-      "stale": true
+      "stale": false
     },
     "dxy": {
-      "value": null,
-      "asof": null,
+      "value": 118.9028,
+      "asof": "2026-08-14",
       "source": "fred:DTWEXBGS",
-      "stale": true
+      "stale": false
     },
     "gold": {
       "value": 4624.1,
       "asof": "2026-08-21",
       "source": "yfinance:GC=F",
       "extra": {
-        "btc_gold_ratio": 16.696
+        "btc_gold_ratio": 16.7211
       },
       "stale": false
     }
@@ -3452,7 +3452,7 @@
       "asof": "2026-08-22"
     },
     "dvol": {
-      "value": 42.36,
+      "value": 42.34,
       "asof": "2026-08-23"
     }
   }
