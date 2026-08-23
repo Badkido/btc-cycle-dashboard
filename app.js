@@ -1,7 +1,6 @@
 "use strict";
 
-/* 把这里换成你自己的仓库地址（用于页脚"源码"链接） */
-const GITHUB_REPO_URL = "https://github.com/YOUR_USERNAME/btc-cycle-dashboard";
+const GITHUB_REPO_URL = "https://github.com/Badkido/btc-cycle-dashboard";
 
 const FETCH_TIMEOUT_MS = 8000;
 const IFRAME_TIMEOUT_MS = 6000;
