@@ -1,0 +1,56 @@
+# BTC 周期位置看板
+
+单一用途的静态看板：BTC 现在处在周期什么相位。没有后端，托管在 GitHub Pages。
+
+设计哲学见任务说明；简单说——克制（8–10 个核心指标）、估值层最大权重、每格给"极端程度 + 一句解读"而不是裸数字，且这些是 12–18 个月尺度的信号，别拿来做短线择时。
+
+## 文件结构
+
+- `index.html` / `styles.css` / `app.js` — 前端页面。`app.js` 读取同目录的 `data.json`，并客户端实时请求恐惧贪婪指数、Binance 资金费率/OI、Deribit DVOL（这几个失败时会退回 `data.json` 里 `realtime_fallback` 的上次快照，并标记"陈旧"）。
+- `fetch.py` + `requirements.txt` — 构建期抓取脚本，由 GitHub Actions 每日跑一次：从 bitcoin-data.com 取 MVRV Z-Score/实现价，自算 200 周均线和已实现波动率（用 Coin Metrics 免费价格历史），抓 FRED 宏观数据和 Farside ETF 流入，写回 `data.json` 并 commit。
+- `.github/workflows/update.yml` — 定时任务（每天 UTC 06:17，可手动触发）。
+- `data.json` — 数据契约，见下方结构说明。当前是占位空值，需要跑一次 `fetch.py`（本地或 Action）才有真实数据。
+
+## 部署步骤
+
+1. **建 GitHub 仓库**，把这个目录的内容 push 上去（这个目录本身已经是独立的 git 仓库，见下方）。
+2. **设置 FRED API key（必需，否则宏观三项拿不到数据）**：去 https://fred.stlouisfed.org/docs/api/api_key.html 免费申请一个 key，然后在仓库 `Settings → Secrets and variables → Actions` 里新建 secret，名字必须是 `FRED_API_KEY`。没有这个 key，宏观三项（实际10Y/名义10Y/DXY）会保持上次的值并标记陈旧，其余指标不受影响。
+3. **（可选）设置 CoinGecko Demo API key**：CoinGecko 的历史成交量端点（算"现货成交量百分位"用的）现在要求免费的 Demo API key 才能访问，纯 keyless 免费层已经不够用了——去 https://www.coingecko.com/en/developers/dashboard 注册申请，然后把 key 存成 secret `COINGECKO_API_KEY`。不设置的话，现价/24h成交量本身不受影响（那部分仍是 keyless 的），只有"历史分位"那一格会一直是灰色空值。
+4. **开 GitHub Pages**：`Settings → Pages`，Source 选 `Deploy from a branch`，branch 选 `main` / `(root)`。
+5. **手动跑一次 Action** 把真实数据填进 `data.json`：`Actions → Update BTC cycle data → Run workflow`。跑完会自动 commit，Pages 会在几分钟内更新。
+6. 打开 `app.js` 顶部把 `GITHUB_REPO_URL` 换成你自己的仓库地址（只影响页脚"源码"链接，不影响功能）。
+
+## `data.json` 契约
+
+每个字段统一结构 `{ value, asof, source, stale, extra }`。`stale: true` 表示这是失败后保留的上一次已知值，前端会在 as-of 日期旁加"陈旧"标记。
+
+```
+mvrv_z          — MVRV Z-Score，extra.mvrv_ratio、extra.history(稀疏化的历史序列，供 sparkline)
+realized_price  — 实现价
+ma_200w         — 200周均线
+price           — 现价，extra.ath / ath_date / drawdown_from_ath
+realized_vol    — 已实现波动率(30d, 年化)，extra.percentile、extra.dvol_fallback
+volume          — 现货成交量，extra.percentile
+etf_flow        — ETF 净流入(百万美元)，extra.trailing_5d、extra.cumulative
+macro           — { nominal_10y, real_10y, dxy, gold(含 extra.btc_gold_ratio) }
+saylor_holdings — 手填字段，fetch.py 不会覆盖它。参考 bitcointreasuries.net / strategy.com 公开披露自行更新
+realtime_fallback — { fng, funding_rate, open_interest, dvol } 的最近一次快照，仅用作客户端实时请求失败时的兜底
+```
+
+## 已知的坑
+
+- **Coin Metrics Community API 不含 `CapRealUSD`（实现市值）**：实测直接调用会返回 `403 not available with supplied credentials`——这是付费指标，免费社区层拿不到，跟最初设想的不一样。`MVRV Z-Score` 和`实现价`因此改用 [bitcoin-data.com](https://bitcoin-data.com) 的免费社区镜像 API（`/v1/mvrv-zscore`、`/v1/realized-price/last`，无需 key）。这个源history 只回溯到 2022 年左右（不是 BTC 全历史），且**免费层限速 10 请求/小时**——`fetch.py` 每次只打 2 个请求，一天一次的定时任务完全够用，但不要在本地循环反复手动跑它去测试，会被限速。Z-Score 数值口径是该源自己的算法（标准的"市值偏离实现市值的标准差数"定义，跟 0/7 常见阈值对得上），我们没有自己重新计算标准差。
+- **CoinGecko 的历史成交量端点现在要求 API key**：`/coins/bitcoin/market_chart` 实测返回 `401`，纯 keyless 免费层已经不再覆盖历史图表数据（当前现价/24h成交量的 `/coins/bitcoin` 端点仍是免费的，不受影响）。"现货成交量百分位"这一项因此改为可选，见上面部署步骤里的 `COINGECKO_API_KEY`。
+- **`fapi.binance.com` 对部分云厂商 IP 返回 451（地域限制）**：GitHub Actions 的 runner IP 段偶尔会被打上这个标签，导致 `fetch.py` 里的资金费率/OI 快照抓取失败——这不影响主线数据，只影响 `realtime_fallback` 里那份兜底快照，且 `fetch.py` 对每个源都做了 try/except，失败不会污染其他字段。前端用户自己浏览器发出的实时请求走的是用户自己的 IP，通常不受影响。
+- **Farside 挡在 Cloudflare 的 JS 挑战后面**：实测无论加什么 User-Agent/Accept 头都拿到 `403` + "Just a moment..." 挑战页，纯 `requests` 抓不到，需要无头浏览器（如 Playwright）才能过——这超出了本项目"零依赖静态站+轻量 Action"的范围，暂时没实现。`etf_flow` 会一直保持初始占位值并标记陈旧，直到有人加上无头浏览器方案。`fetch.py` 里的 `fetch_farside_etf_flows()` 已经按"能解析就解析"写好了表格解析逻辑，接上一个能过 Cloudflare 挑战的请求方式（例如换成 Playwright headless）应该就能跑通。
+- **checkonchain 的 iframe** 理论上没有设 `X-Frame-Options`（否则这个方案从一开始就不成立），如果未来对方加了限制，页面会在 iframe 触发 `error` 事件时自动换成"在新标签页打开原图"的占位链接。
+- **MVRV Z-Score 口径**：见上面 bitcoin-data.com 那条——现在是消费第三方已经算好的值，不是本项目自己用全历史累计标准差重新计算的（免费数据源拿不到算这个所需的原始 `CapRealUSD`）。跟某些其他第三方版本数值对不上，属于口径/数据源差异，不是 bug。
+
+## 本地跑一次抓取脚本
+
+```bash
+pip install -r requirements.txt
+FRED_API_KEY=你的key python fetch.py
+```
+
+会直接改写本目录下的 `data.json`。

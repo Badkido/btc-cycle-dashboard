@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC 周期位置看板</title>
+<meta name="description" content="单一用途的 BTC 周期相位仪器 — 估值、波动率、流动性、情绪、宏观五层信号，克制、结论先行。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>₿</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top-bar">
+  <div class="brand">
+    <span class="brand-glyph">₿</span>
+    <div>
+      <h1>BTC 周期位置</h1>
+      <p class="tagline">12–18 个月尺度的相位判断 · 不是择时信号</p>
+    </div>
+  </div>
+  <div class="bg-strip" id="bg-strip">
+    <div class="bg-item">
+      <span class="bg-label">现价</span>
+      <span class="bg-value" id="bg-price">—</span>
+    </div>
+    <div class="bg-item">
+      <span class="bg-label">距 ATH</span>
+      <span class="bg-value" id="bg-drawdown">—</span>
+    </div>
+    <div class="bg-item">
+      <span class="bg-label">Saylor / Strategy 持仓</span>
+      <span class="bg-value" id="bg-saylor">—</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ LAYER 1 · 估值/成本（脊椎） ============ -->
+  <section class="layer layer-spine">
+    <h2 class="layer-title">估值 / 成本 <span class="layer-sub">这层说了算</span></h2>
+    <div class="spine-grid">
+
+      <article class="card card-hero" data-card="mvrv-z">
+        <header class="card-head">
+          <h3>MVRV Z-Score<span class="info-dot" tabindex="0" data-tip="衡量市值偏离全网链上平均成本多少个标准差（全历史累计标准差，非滚动窗口）。历史大底都在 Z 跌破 0；顶部在 7 以上。">?</span></h3>
+          <span class="status-dot" id="dot-mvrv-z"></span>
+        </header>
+        <div class="card-body hero-body">
+          <div class="hero-value" id="val-mvrv-z">—</div>
+          <div class="hero-sub" id="sub-mvrv-z"></div>
+          <canvas id="spark-mvrv-z" class="sparkline sparkline-lg" height="90"></canvas>
+        </div>
+        <p class="interpretation">衡量市值偏离全网链上平均成本多少个标准差。历史大底都在 Z 跌破 0；顶部在 7 以上。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-mvrv-z">—</span>
+          <span class="source">bitcoin-data.com</span>
+        </footer>
+      </article>
+
+      <article class="card" data-card="cost-basis">
+        <header class="card-head">
+          <h3>价格 vs 实现价 / 200周线<span class="info-dot" tabindex="0" data-tip="实现价是全网平均持仓成本，200周线是历次熊市的历史硬地板。">?</span></h3>
+          <span class="status-dot" id="dot-cost-basis"></span>
+        </header>
+        <div class="card-body">
+          <div class="cost-rail" id="cost-rail">
+            <div class="cost-track"></div>
+            <div class="cost-marker cost-marker-realized" id="marker-realized"><span class="cost-marker-label">实现价</span></div>
+            <div class="cost-marker cost-marker-200w" id="marker-200w"><span class="cost-marker-label">200周线</span></div>
+            <div class="cost-marker cost-marker-price" id="marker-price"><span class="cost-marker-label">现价</span></div>
+          </div>
+          <div class="cost-numbers">
+            <div><span class="cost-num-label">现价</span><span class="cost-num-value" id="val-price-cb">—</span></div>
+            <div><span class="cost-num-label">实现价</span><span class="cost-num-value" id="val-realized">—</span></div>
+            <div><span class="cost-num-label">200周线</span><span class="cost-num-value" id="val-200w">—</span></div>
+          </div>
+        </div>
+        <p class="interpretation">实现价是全网平均成本，200周线是历次熊底的硬地板。贴近或跌破 = 历史级价值区。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-cost-basis">—</span>
+          <span class="source">bitcoin-data.com / Coin Metrics·自算</span>
+        </footer>
+      </article>
+
+      <article class="card card-wide" data-card="lth-sth">
+        <header class="card-head">
+          <h3>LTH-MVRV / STH-MVRV 收敛<span class="info-dot" tabindex="0" data-tip="看两条线是在收口(换手完成)还是张口(分发未完)，不用看具体数字。">?</span></h3>
+        </header>
+        <div class="card-body iframe-pair">
+          <div class="iframe-slot">
+            <p class="iframe-caption">LTH-MVRV(长期持有者)</p>
+            <iframe id="iframe-lth" title="LTH-MVRV" loading="lazy" referrerpolicy="no-referrer"
+              src="https://charts.checkonchain.com/btconchain/unrealised/mvrv_lth/mvrv_lth_dark.html"></iframe>
+            <div class="iframe-fallback" id="fallback-lth" hidden>
+              <p>图表被来源站点的 iframe 策略拦截。</p>
+              <a href="https://charts.checkonchain.com/btconchain/unrealised/mvrv_lth/mvrv_lth_dark.html" target="_blank" rel="noopener noreferrer">在新标签页打开原图 →</a>
+            </div>
+          </div>
+          <div class="iframe-slot">
+            <p class="iframe-caption">STH-MVRV(短期持有者)</p>
+            <iframe id="iframe-sth" title="STH-MVRV" loading="lazy" referrerpolicy="no-referrer"
+              src="https://charts.checkonchain.com/btconchain/unrealised/sthmvrv_indicator/sthmvrv_indicator_dark.html"></iframe>
+            <div class="iframe-fallback" id="fallback-sth" hidden>
+              <p>图表被来源站点的 iframe 策略拦截。</p>
+              <a href="https://charts.checkonchain.com/btconchain/unrealised/sthmvrv_indicator/sthmvrv_indicator_dark.html" target="_blank" rel="noopener noreferrer">在新标签页打开原图 →</a>
+            </div>
+          </div>
+        </div>
+        <p class="interpretation">长/短期持有者盈利水平收口 = 换手完成、卖压枯竭 = 底部确认；张口 = 分发未完、可能还需一波卖出。这一格看形态即可。</p>
+        <footer class="card-foot">
+          <span class="source">Charts by <a href="https://checkonchain.com" target="_blank" rel="noopener noreferrer">checkonchain.com</a></span>
+        </footer>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============ LAYER 2 · 波动率 ============ -->
+  <section class="layer">
+    <h2 class="layer-title">波动率 <span class="layer-sub">弹簧压缩程度</span></h2>
+    <div class="grid grid-2">
+      <article class="card" data-card="vol">
+        <header class="card-head">
+          <h3>已实现波动率(30d) / 隐含波动率(DVOL)<span class="info-dot" tabindex="0" data-tip="只提示要变盘，不指方向，别当买卖信号。">?</span></h3>
+          <span class="status-dot" id="dot-vol"></span>
+        </header>
+        <div class="card-body dual-stat">
+          <div class="stat-block">
+            <span class="stat-label">已实现波动率(30d, 年化)</span>
+            <span class="stat-value" id="val-realized-vol">—</span>
+            <span class="stat-note" id="pct-realized-vol"></span>
+          </div>
+          <div class="stat-block">
+            <span class="stat-label">隐含波动率 DVOL</span>
+            <span class="stat-value" id="val-dvol">—</span>
+            <span class="stat-note">Deribit 实时</span>
+          </div>
+        </div>
+        <p class="interpretation">波动率压到历史极低 = 弹簧压满、将变盘。注意：只提示要变盘，不指方向，别当买卖信号。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-vol">—</span>
+          <span class="source">自算 / Deribit</span>
+        </footer>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 3 · 流动性/参与度 ============ -->
+  <section class="layer">
+    <h2 class="layer-title">流动性 / 参与度</h2>
+    <div class="grid grid-2">
+      <article class="card" data-card="volume">
+        <header class="card-head">
+          <h3>现货成交量百分位</h3>
+          <span class="status-dot" id="dot-volume"></span>
+        </header>
+        <div class="card-body">
+          <div class="metric-value" id="val-volume">—</div>
+          <div class="percentile-bar"><div class="percentile-fill" id="fill-volume"></div></div>
+          <div class="percentile-caption" id="caption-volume"></div>
+        </div>
+        <p class="interpretation">成交量枯竭到熊市水平 = 卖压耗尽的确认之一。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-volume">—</span>
+          <span class="source">CoinGecko</span>
+        </footer>
+      </article>
+
+      <article class="card" data-card="etf">
+        <header class="card-head">
+          <h3>ETF 净流入</h3>
+          <span class="status-dot" id="dot-etf"></span>
+        </header>
+        <div class="card-body">
+          <div class="metric-value" id="val-etf">—</div>
+          <div class="etf-bars" id="etf-bars"></div>
+          <div class="etf-cumulative">累计: <span id="val-etf-cum">—</span></div>
+        </div>
+        <p class="interpretation">ETF 之后最重要的单一变量，散户反身性弹簧被它钝化。转正持续 = 边际买家回来；流出 = 结构性逆风。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-etf">—</span>
+          <span class="source"><a href="https://farside.co.uk/btc/" target="_blank" rel="noopener noreferrer">Farside</a></span>
+        </footer>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 4 · 情绪/杠杆 ============ -->
+  <section class="layer">
+    <h2 class="layer-title">情绪 / 杠杆</h2>
+    <div class="grid grid-2">
+      <article class="card" data-card="fng">
+        <header class="card-head">
+          <h3>恐惧贪婪指数</h3>
+          <span class="status-dot" id="dot-fng"></span>
+        </header>
+        <div class="card-body">
+          <div class="metric-value" id="val-fng">—</div>
+          <div class="fng-label" id="label-fng"></div>
+        </div>
+        <p class="interpretation">极度恐惧(&lt;25)是逆向构建性信号。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-fng">—</span>
+          <span class="source">alternative.me</span>
+        </footer>
+      </article>
+
+      <article class="card" data-card="leverage">
+        <header class="card-head">
+          <h3>资金费率 / 未平仓量<span class="info-dot" tabindex="0" data-tip="单交易所口径，以 Binance 为全市场代理。">?</span></h3>
+          <span class="status-dot" id="dot-leverage"></span>
+        </header>
+        <div class="card-body dual-stat">
+          <div class="stat-block">
+            <span class="stat-label">资金费率(8h)</span>
+            <span class="stat-value" id="val-funding">—</span>
+          </div>
+          <div class="stat-block">
+            <span class="stat-label">未平仓量(OI)</span>
+            <span class="stat-value" id="val-oi">—</span>
+          </div>
+        </div>
+        <p class="interpretation">判断杠杆洗没洗干净。负资金费+OI 下降=洗杠杆；高资金费=拥挤脆弱。单交易所口径。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-leverage">—</span>
+          <span class="source">Binance Futures</span>
+        </footer>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ LAYER 5 · 宏观证伪项 ============ -->
+  <section class="layer layer-macro">
+    <h2 class="layer-title">宏观证伪项 <span class="layer-sub">专杀"这次不一样"的类比</span></h2>
+    <div class="grid grid-2">
+      <article class="card card-macro" data-card="rates">
+        <header class="card-head">
+          <h3>实际10Y / 名义10Y / DXY</h3>
+        </header>
+        <div class="card-body dual-stat triple-stat">
+          <div class="stat-block">
+            <span class="stat-label">实际10Y(TIPS)</span>
+            <span class="stat-value" id="val-real10y">—</span>
+          </div>
+          <div class="stat-block">
+            <span class="stat-label">名义10Y</span>
+            <span class="stat-value" id="val-nom10y">—</span>
+          </div>
+          <div class="stat-block">
+            <span class="stat-label">DXY</span>
+            <span class="stat-value" id="val-dxy">—</span>
+          </div>
+        </div>
+        <p class="interpretation">BTC 作无息价值储藏，直接和便宜的真实收益率抢配置。当前实际利率处于 2008 以来高位区间——最强的看空证伪项。DXY 走强同为逆风。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-rates">—</span>
+          <span class="source">FRED</span>
+        </footer>
+      </article>
+
+      <article class="card card-macro" data-card="gold">
+        <header class="card-head">
+          <h3>BTC / 黄金比值<span class="info-dot" tabindex="0" data-tip="黄金是同为价值储藏的竞品资产，可选参考。">?</span></h3>
+        </header>
+        <div class="card-body dual-stat">
+          <div class="stat-block">
+            <span class="stat-label">黄金现价(USD/oz)</span>
+            <span class="stat-value" id="val-gold">—</span>
+          </div>
+          <div class="stat-block">
+            <span class="stat-label">BTC/黄金比值</span>
+            <span class="stat-value" id="val-btc-gold">—</span>
+          </div>
+        </div>
+        <p class="interpretation">黄金是同为价值储藏的竞品资产。比值走高 = BTC 相对黄金更受青睐。</p>
+        <footer class="card-foot">
+          <span class="asof" id="asof-gold">—</span>
+          <span class="source">yfinance GC=F</span>
+        </footer>
+      </article>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <details class="guardrails">
+    <summary>认知护栏 — 使用本看板前请读</summary>
+    <ol>
+      <li>这些是 12–18 个月尺度信号，6 个月内基本无 edge，是给持有期定调、不是入场择时。</li>
+      <li>ETF 之后 realized cap 构成变化，历史阈值可能钝化。</li>
+      <li>MVRV-Z 用的是官方累计口径；若与第三方社区版数值不一致属正常（口径不同）。</li>
+      <li>LTH/STH 看形态不看数字。</li>
+      <li>数据源与免责声明：本页所有数据来自公开 API/网页，仅供研究参考，不构成投资建议。数据可能延迟或失败，失败时展示上次已知值并标注陈旧。</li>
+    </ol>
+  </details>
+  <p class="footer-meta">数据更新: <span id="footer-generated">—</span> · <a href="https://github.com/" id="footer-repo-link" target="_blank" rel="noopener noreferrer">源码</a></p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

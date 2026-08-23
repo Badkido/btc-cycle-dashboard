@@ -1,0 +1,118 @@
+{
+  "generated_at": "2026-08-22T02:12:38.553539+00:00",
+  "mvrv_z": {
+    "value": 0.5638,
+    "asof": "2026-08-20",
+    "source": "bitcoin-data.com",
+    "stale": false,
+    "extra": {
+      "mvrv_ratio": 1.4916,
+      "history": []
+    }
+  },
+  "realized_price": {
+    "value": 52299.94,
+    "asof": "2026-08-20",
+    "source": "bitcoin-data.com",
+    "stale": false
+  },
+  "ma_200w": {
+    "value": 64281.65,
+    "asof": "2026-08-21",
+    "source": "computed",
+    "stale": false
+  },
+  "price": {
+    "value": 78008,
+    "asof": "2026-08-22",
+    "source": "coingecko",
+    "extra": {
+      "ath": 126080,
+      "ath_date": "2025-10-06",
+      "drawdown_from_ath": -0.3813
+    },
+    "stale": false
+  },
+  "realized_vol": {
+    "value": 0.4387,
+    "asof": "2026-08-21",
+    "source": "computed",
+    "extra": {
+      "percentile": 0.2698,
+      "dvol_fallback": 43.22
+    },
+    "stale": false
+  },
+  "volume": {
+    "value": 66548593896,
+    "asof": "2026-08-22",
+    "source": "coingecko",
+    "extra": {
+      "percentile": null
+    },
+    "stale": false
+  },
+  "etf_flow": {
+    "value": null,
+    "asof": null,
+    "source": "farside",
+    "stale": true,
+    "extra": {
+      "trailing_5d": [],
+      "cumulative": null
+    }
+  },
+  "macro": {
+    "nominal_10y": {
+      "value": null,
+      "asof": null,
+      "source": "fred:DGS10",
+      "stale": true
+    },
+    "real_10y": {
+      "value": null,
+      "asof": null,
+      "source": "fred:DFII10",
+      "stale": true
+    },
+    "dxy": {
+      "value": null,
+      "asof": null,
+      "source": "fred:DTWEXBGS",
+      "stale": true
+    },
+    "gold": {
+      "value": 4661.6,
+      "asof": "2026-08-21",
+      "source": "yfinance:GC=F",
+      "extra": {
+        "btc_gold_ratio": 16.7342
+      },
+      "stale": false
+    }
+  },
+  "saylor_holdings": {
+    "value": null,
+    "asof": null,
+    "note": "手填，参考 bitcointreasuries.net / strategy.com 持仓披露"
+  },
+  "realtime_fallback": {
+    "fng": {
+      "value": 71,
+      "classification": "Greed",
+      "asof": "2026-08-22"
+    },
+    "funding_rate": {
+      "value": 0.0001,
+      "asof": "2026-08-22"
+    },
+    "open_interest": {
+      "value": 105915.925,
+      "asof": "2026-08-22"
+    },
+    "dvol": {
+      "value": 43.22,
+      "asof": "2026-08-22"
+    }
+  }
+}

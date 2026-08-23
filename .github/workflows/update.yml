@@ -1,0 +1,40 @@
+name: Update BTC cycle data
+
+on:
+  schedule:
+    - cron: "17 6 * * *"  # daily, 06:17 UTC — off the hour to dodge upstream load spikes
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run fetch.py
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+        run: python fetch.py
+
+      - name: Commit data.json if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- data.json; then
+            echo "no changes"
+          else
+            git add data.json
+            git commit -m "chore: update data.json [automated]"
+            git push
+          fi
