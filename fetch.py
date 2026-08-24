@@ -26,7 +26,6 @@ FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
 FNG_URL = "https://api.alternative.me/fng/"
 BINANCE_FAPI_BASE = "https://fapi.binance.com"
 DERIBIT_BASE = "https://www.deribit.com/api/v2"
-FARSIDE_URL = "https://farside.co.uk/btc/"
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 
 REQUEST_TIMEOUT = 20
@@ -264,47 +263,33 @@ def fetch_fred_series(series_id, api_key):
 
 
 # ---------------------------------------------------------------------------
-# Farside — no official API, scrape the HTML table. Structure may change;
-# this is a best-effort parse guarded end-to-end by try/except in main().
+# ETF flows — TFTC's open dataset, not Farside directly.
+#
+# VERIFIED AGAINST LIVE SITE: farside.co.uk sits behind a Cloudflare JS
+# challenge ("Just a moment...") that returns 403 to any plain HTTP client —
+# curl, requests, pandas.read_html, all of it. No amount of User-Agent/Accept
+# header tweaking gets past it; it needs an actual JS-executing browser
+# (Playwright headless etc.), which is out of scope for a lightweight daily
+# cron. TFTC (tftc.io) publishes a CC BY 4.0 JSON mirror of US spot BTC ETF
+# flows — compiled from SoSoValue + issuer disclosures as tabulated by
+# Farside itself — with an open CORS header and no auth. Same underlying
+# data, actually reachable. https://www.tftc.io/bitcoin-etf-flows
 # ---------------------------------------------------------------------------
-def fetch_farside_etf_flows():
-    import pandas as pd
+TFTC_ETF_URL = "https://www.tftc.io/bitcoin-etf-flows/data.json"
 
-    r = requests.get(FARSIDE_URL, headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
+
+def fetch_tftc_etf_flows():
+    r = requests.get(TFTC_ETF_URL, headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
-    tables = pd.read_html(r.text)
-    if not tables:
-        raise RuntimeError("no tables found on farside page")
-    # pick the largest table on the page — that's the daily flow table
-    df = max(tables, key=lambda t: t.shape[0])
-    df = df.dropna(how="all")
+    payload = r.json()
+    days = payload.get("days", [])
+    if not days:
+        raise RuntimeError("tftc.io returned no daily flow rows")
 
-    # last column is usually "Total"; first column is the date
-    date_col = df.columns[0]
-    total_col = df.columns[-1]
-
-    def to_num(x):
-        if isinstance(x, str):
-            x = x.replace(",", "").replace("(", "-").replace(")", "").strip()
-            if x in ("", "-", "nan"):
-                return None
-        try:
-            return float(x)
-        except (TypeError, ValueError):
-            return None
-
-    rows = []
-    for _, row in df.iterrows():
-        date_val = str(row[date_col])
-        total_val = to_num(row[total_col])
-        if total_val is None:
-            continue
-        if any(k in date_val.lower() for k in ["total", "average", "nan"]):
-            continue
-        rows.append((date_val, total_val))
-
+    rows = [(d["date"], round(d["netFlowUsd"] / 1e6, 2)) for d in days if d.get("netFlowUsd") is not None]
     if not rows:
-        raise RuntimeError("could not parse any daily flow rows from farside table")
+        raise RuntimeError("tftc.io rows had no usable netFlowUsd")
+    rows.sort(key=lambda r: r[0])
 
     cumulative = sum(v for _, v in rows)
     latest_date, latest_val = rows[-1]
@@ -470,7 +455,7 @@ def main():
             "volume history/percentile", compute_volume_history_and_percentile, cg_snapshot["volume"], cg_api_key
         )
 
-    farside_result, _ = safe("farside etf flows", fetch_farside_etf_flows)
+    etf_result, _ = safe("etf flows (tftc.io)", fetch_tftc_etf_flows)
 
     fred_results = {}
     if fred_key:
@@ -576,9 +561,9 @@ def main():
     out["etf_flow"] = merge_field(
         data.get("etf_flow"),
         {
-            "value": farside_result["value"], "asof": farside_result["asof"], "source": "farside",
-            "extra": {"history": farside_result["history"], "cumulative": farside_result["cumulative"]},
-        } if farside_result else None,
+            "value": etf_result["value"], "asof": etf_result["asof"], "source": "tftc.io",
+            "extra": {"history": etf_result["history"], "cumulative": etf_result["cumulative"]},
+        } if etf_result else None,
         stale=True,
     )
 
