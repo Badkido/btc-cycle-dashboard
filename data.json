@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-08-24T02:08:28.672556+00:00",
+  "generated_at": "2026-08-24T02:14:32.029396+00:00",
   "mvrv_z": {
     "value": 0.8611,
     "asof": "2026-08-22",
     "source": "bitcoin-data.com",
     "extra": {
-      "mvrv_ratio": 1.4708,
+      "mvrv_ratio": 1.4719,
       "history": [
         [
           "2022-08-24",
@@ -3364,13 +3364,13 @@
     "stale": false
   },
   "price": {
-    "value": 77094,
+    "value": 77150,
     "asof": "2026-08-24",
     "source": "coingecko",
     "extra": {
       "ath": 126080,
       "ath_date": "2025-10-06",
-      "drawdown_from_ath": -0.3885
+      "drawdown_from_ath": -0.3881
     },
     "stale": false
   },
@@ -3380,7 +3380,7 @@
     "source": "computed",
     "extra": {
       "percentile": 0.2617,
-      "dvol_fallback": 43.56,
+      "dvol_fallback": 43.67,
       "history": [
         [
           "2010-08-17",
@@ -9235,7 +9235,7 @@
     "stale": false
   },
   "volume": {
-    "value": 30676690639,
+    "value": 30767953305,
     "asof": "2026-08-24",
     "source": "coingecko",
     "extra": {
@@ -13000,26 +13000,26 @@
       "value": 4.69,
       "asof": "2026-08-20",
       "source": "fred:DGS10",
-      "stale": true
+      "stale": false
     },
     "real_10y": {
       "value": 2.35,
       "asof": "2026-08-20",
       "source": "fred:DFII10",
-      "stale": true
+      "stale": false
     },
     "dxy": {
       "value": 118.9028,
       "asof": "2026-08-14",
       "source": "fred:DTWEXBGS",
-      "stale": true
+      "stale": false
     },
     "gold": {
-      "value": 4692.9,
+      "value": 4693.1,
       "asof": "2026-08-23",
       "source": "yfinance:GC=F",
       "extra": {
-        "btc_gold_ratio": 16.4278
+        "btc_gold_ratio": 16.439
       },
       "stale": false
     }
@@ -13044,7 +13044,7 @@
       "asof": "2026-08-24"
     },
     "dvol": {
-      "value": 43.56,
+      "value": 43.67,
       "asof": "2026-08-24"
     }
   }
