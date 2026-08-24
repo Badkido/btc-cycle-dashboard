@@ -224,6 +224,17 @@ main {
   margin-top: 0.9rem;
 }
 .sparkline-wrap canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+.sparkline-wrap-md { height: 140px; }
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.9rem;
+  margin-top: 0.5rem;
+  font-size: 0.68rem;
+  color: var(--text-faint);
+}
+.chart-legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.chart-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 
 .interpretation {
   font-size: 0.78rem;
@@ -360,8 +371,8 @@ main {
 .etf-bars {
   display: flex;
   align-items: flex-end;
-  gap: 0.4rem;
-  height: 48px;
+  gap: 2px;
+  height: 56px;
   margin: 0.6rem 0 0.4rem;
 }
 .etf-bar {

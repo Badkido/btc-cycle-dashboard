@@ -77,6 +77,10 @@
             <div><span class="cost-num-label">实现价</span><span class="cost-num-value" id="val-realized">—</span></div>
             <div><span class="cost-num-label">200周线</span><span class="cost-num-value" id="val-200w">—</span></div>
           </div>
+          <div class="sparkline-wrap sparkline-wrap-md">
+            <canvas id="spark-cost-basis"></canvas>
+          </div>
+          <div class="chart-legend" id="legend-cost-basis"></div>
         </div>
         <p class="interpretation">实现价是全网平均成本，200周线是历次熊底的硬地板。贴近或跌破 = 历史级价值区。</p>
         <footer class="card-foot">
@@ -127,16 +131,21 @@
           <h3>已实现波动率(30d) / 隐含波动率(DVOL)<span class="info-dot" tabindex="0" data-tip="只提示要变盘，不指方向，别当买卖信号。">?</span></h3>
           <span class="status-dot" id="dot-vol"></span>
         </header>
-        <div class="card-body dual-stat">
-          <div class="stat-block">
-            <span class="stat-label">已实现波动率(30d, 年化)</span>
-            <span class="stat-value" id="val-realized-vol">—</span>
-            <span class="stat-note" id="pct-realized-vol"></span>
+        <div class="card-body">
+          <div class="dual-stat">
+            <div class="stat-block">
+              <span class="stat-label">已实现波动率(30d, 年化)</span>
+              <span class="stat-value" id="val-realized-vol">—</span>
+              <span class="stat-note" id="pct-realized-vol"></span>
+            </div>
+            <div class="stat-block">
+              <span class="stat-label">隐含波动率 DVOL</span>
+              <span class="stat-value" id="val-dvol">—</span>
+              <span class="stat-note">Deribit 实时</span>
+            </div>
           </div>
-          <div class="stat-block">
-            <span class="stat-label">隐含波动率 DVOL</span>
-            <span class="stat-value" id="val-dvol">—</span>
-            <span class="stat-note">Deribit 实时</span>
+          <div class="sparkline-wrap">
+            <canvas id="spark-realized-vol"></canvas>
           </div>
         </div>
         <p class="interpretation">波动率压到历史极低 = 弹簧压满、将变盘。注意：只提示要变盘，不指方向，别当买卖信号。</p>
@@ -161,6 +170,9 @@
           <div class="metric-value" id="val-volume">—</div>
           <div class="percentile-bar"><div class="percentile-fill" id="fill-volume"></div></div>
           <div class="percentile-caption" id="caption-volume"></div>
+          <div class="sparkline-wrap">
+            <canvas id="spark-volume"></canvas>
+          </div>
         </div>
         <p class="interpretation">成交量枯竭到熊市水平 = 卖压耗尽的确认之一。</p>
         <footer class="card-foot">

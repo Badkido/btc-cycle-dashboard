@@ -25,17 +25,23 @@
 每个字段统一结构 `{ value, asof, source, stale, extra }`。`stale: true` 表示这是失败后保留的上一次已知值，前端会在 as-of 日期旁加"陈旧"标记。
 
 ```
-mvrv_z          — MVRV Z-Score，extra.mvrv_ratio、extra.history(稀疏化的历史序列，供 sparkline)
-realized_price  — 实现价
-ma_200w         — 200周均线
+mvrv_z          — MVRV Z-Score，extra.mvrv_ratio、extra.history(稀疏化的日线序列，供 sparkline)
+realized_price  — 实现价(当前值，来自 bitcoin-data.com 每日序列的最新一条)
+ma_200w         — 200周均线(当前值，取自 cost_basis_history 的最后一周)
 price           — 现价，extra.ath / ath_date / drawdown_from_ath
-realized_vol    — 已实现波动率(30d, 年化)，extra.percentile、extra.dvol_fallback
-volume          — 现货成交量，extra.percentile
-etf_flow        — ETF 净流入(百万美元)，extra.trailing_5d、extra.cumulative
+cost_basis_history — 价格/实现价/200周线三条线的周线历史，供成本线卡片画图：
+                     { dates, price, realized_price, ma_200w } 四个等长数组(周频，2010 至今)。
+                     realized_price 在 bitcoin-data.com 覆盖范围(~2022)之前、ma_200w 在满
+                     200 周之前都是 null，前端按 spanGaps 处理，直接从有数据的地方开始画
+realized_vol    — 已实现波动率(30d, 年化)，extra.percentile、extra.dvol_fallback、extra.history(滚动30d序列)
+volume          — 现货成交量，extra.percentile、extra.history(需要 COINGECKO_API_KEY 才有，否则为 undefined)
+etf_flow        — ETF 净流入(百万美元)，extra.history([date,value] 对，最多保留 90 天)、extra.cumulative
 macro           — { nominal_10y, real_10y, dxy, gold(含 extra.btc_gold_ratio) }
 saylor_holdings — 手填字段，fetch.py 不会覆盖它。参考 bitcointreasuries.net / strategy.com 公开披露自行更新
 realtime_fallback — { fng, funding_rate, open_interest, dvol } 的最近一次快照，仅用作客户端实时请求失败时的兜底
 ```
+
+历史类字段统一用 `[date, value]` 数对数组（`cost_basis_history` 因为是多条线共享一套日期，例外用了 `{dates:[], series1:[], series2:[]}` 的并行数组结构）。
 
 ## 已知的坑
 

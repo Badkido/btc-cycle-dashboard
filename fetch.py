@@ -70,7 +70,7 @@ def safe(label, fn, *args, **kwargs):
 # "not available with supplied credentials" on the community tier — it is
 # gated behind Coin Metrics' paid plans. That makes it impossible to compute
 # MVRV-Z or realized price from Coin Metrics without a paid key, contrary to
-# the original plan. See fetch_mvrv_z_bitcoindata() / fetch_realized_price_bitcoindata()
+# the original plan. See fetch_mvrv_z_bitcoindata() / fetch_realized_price_history_bitcoindata()
 # below for the substitute free source. Coin Metrics is kept only for the
 # full daily price history used in the 200w MA and realized-vol calcs.
 # ---------------------------------------------------------------------------
@@ -147,31 +147,74 @@ def fetch_mvrv_z_bitcoindata():
     }
 
 
-def fetch_realized_price_bitcoindata():
-    r = requests.get(f"{BITCOIN_DATA_BASE}/realized-price/last", headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
+def fetch_realized_price_history_bitcoindata():
+    """Full history in one call (its last row doubles as the latest value),
+    to stay well under bitcoin-data.com's 10 req/hour free-tier limit."""
+    r = requests.get(f"{BITCOIN_DATA_BASE}/realized-price", headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
-    row = r.json()
-    return {"value": round(float(row["realizedPrice"]), 2), "asof": row["d"]}
+    rows = r.json()
+    if not isinstance(rows, list) or not rows:
+        raise RuntimeError("bitcoin-data.com realized-price returned no data")
+    rows.sort(key=lambda row: row["d"])
+    return [(row["d"], float(row["realizedPrice"])) for row in rows]
 
 
-def compute_ma_200w(series):
-    """Resample daily closes to weekly (last obs of each week), rolling 200w mean."""
+def _weekly_resample(daily_pairs):
+    """[(date_str, value), ...] -> {(iso_year, iso_week): (date_str, value)},
+    keeping the last value seen in each ISO week."""
     weekly = {}
-    for r in series:
-        d = datetime.strptime(r["date"], "%Y-%m-%d")
-        year, week, _ = d.isocalendar()
-        weekly[(year, week)] = r["price"]  # overwritten by later days -> last obs
-    weekly_vals = [v for _, v in sorted(weekly.items())]
-    if len(weekly_vals) < 200:
-        raise RuntimeError("not enough weekly data for 200w MA")
-    ma = sum(weekly_vals[-200:]) / 200
-    return {"value": round(ma, 2), "asof": series[-1]["date"]}
+    for date_str, value in daily_pairs:
+        key = datetime.strptime(date_str, "%Y-%m-%d").isocalendar()[:2]
+        weekly[key] = (date_str, value)
+    return weekly
+
+
+def compute_cost_basis_history(cm_series, realized_pairs):
+    """Weekly-aligned {dates, price, realized_price, ma_200w} for the cost-basis
+    chart. Weekly cadence (not daily) so a rolling 200-period mean is a real
+    200-WEEK moving average, and so the three series — full BTC price history
+    since 2010, realized price only from ~2022 (bitcoin-data.com's range) —
+    can share one x-axis without a daily-resolution alignment headache.
+    realized_price/ma_200w are null for weeks before each series has enough
+    history; the frontend just skips drawing those segments."""
+    price_weekly = _weekly_resample([(r["date"], r["price"]) for r in cm_series])
+    realized_weekly = _weekly_resample(realized_pairs)
+
+    weeks = sorted(price_weekly.keys())
+    if len(weeks) < 210:
+        raise RuntimeError("not enough weekly price data for cost-basis history")
+
+    dates = [price_weekly[w][0] for w in weeks]
+    prices = [round(price_weekly[w][1], 2) for w in weeks]
+
+    ma_200w_series = [None] * len(prices)
+    window_sum = 0.0
+    for i, p in enumerate(prices):
+        window_sum += p
+        if i >= 200:
+            window_sum -= prices[i - 200]
+        if i >= 199:
+            ma_200w_series[i] = round(window_sum / 200, 2)
+
+    realized_series = [
+        round(realized_weekly[w][1], 2) if w in realized_weekly else None
+        for w in weeks
+    ]
+
+    return {
+        "dates": dates,
+        "price": prices,
+        "realized_price": realized_series,
+        "ma_200w": ma_200w_series,
+    }
 
 
 def compute_realized_vol(series):
-    """30d realized vol (annualized) from daily log returns, plus its
-    percentile rank against the full history of rolling-30d realized vol."""
+    """30d realized vol (annualized) from daily log returns, its percentile
+    rank against the full history of rolling-30d realized vol, and the
+    rolling series itself for a sparkline."""
     prices = [r["price"] for r in series]
+    dates = [r["date"] for r in series]
     log_returns = [math.log(prices[i] / prices[i - 1]) for i in range(1, len(prices))]
     if len(log_returns) < 400:
         raise RuntimeError("not enough return history for realized vol")
@@ -182,15 +225,19 @@ def compute_realized_vol(series):
         return math.sqrt(var) * math.sqrt(365)
 
     rolling = []
-    for i in range(30, len(log_returns) + 1):
-        rolling.append(ann_vol(log_returns[i - 30:i]))
+    rolling_dates = []
+    for k in range(30, len(log_returns) + 1):
+        rolling.append(ann_vol(log_returns[k - 30:k]))
+        rolling_dates.append(dates[k])
 
     current = rolling[-1]
     rank = sum(1 for v in rolling if v <= current) / len(rolling)
+    history = [[d, round(v, 4)] for d, v in zip(rolling_dates, rolling)]
     return {
         "value": round(current, 4),
-        "asof": series[-1]["date"],
+        "asof": rolling_dates[-1],
         "percentile": round(rank, 4),
+        "history": _thin_history(history),
     }
 
 
@@ -259,13 +306,12 @@ def fetch_farside_etf_flows():
     if not rows:
         raise RuntimeError("could not parse any daily flow rows from farside table")
 
-    trailing_5d = rows[-5:]
     cumulative = sum(v for _, v in rows)
     latest_date, latest_val = rows[-1]
     return {
         "value": latest_val,
         "asof": latest_date,
-        "trailing_5d": [{"date": d, "value": v} for d, v in trailing_5d],
+        "history": [[d, v] for d, v in rows[-90:]],
         "cumulative": round(cumulative, 1),
     }
 
@@ -309,8 +355,8 @@ def fetch_coingecko_snapshot():
     }
 
 
-def compute_volume_percentile(current_volume, cg_api_key):
-    """Percentile using CoinGecko's daily market-chart history.
+def compute_volume_history_and_percentile(current_volume, cg_api_key):
+    """Percentile + history using CoinGecko's daily market-chart volume.
 
     VERIFIED AGAINST LIVE API: /coins/bitcoin/market_chart now returns 401
     without a (free, registration-required) CoinGecko Demo API key — the
@@ -319,18 +365,23 @@ def compute_volume_percentile(current_volume, cg_api_key):
     itself, from /coins/bitcoin, is unaffected and still keyless).
     """
     if not cg_api_key:
-        raise RuntimeError("COINGECKO_API_KEY not set — skipping volume percentile")
+        raise RuntimeError("COINGECKO_API_KEY not set — skipping volume history/percentile")
     url = f"{COINGECKO_BASE}/coins/bitcoin/market_chart"
     params = {"vs_currency": "usd", "days": "1825", "interval": "daily"}
     headers = dict(UA_HEADERS)
     headers["x-cg-demo-api-key"] = cg_api_key
     r = requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
-    volumes = [v for _, v in r.json().get("total_volumes", [])]
-    if not volumes:
+    points = r.json().get("total_volumes", [])
+    if not points:
         raise RuntimeError("no volume history from coingecko")
+    volumes = [v for _, v in points]
     rank = sum(1 for v in volumes if v <= current_volume) / len(volumes)
-    return round(rank, 4)
+    history = [
+        [datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d"), round(v, 0)]
+        for ts, v in points
+    ]
+    return {"percentile": round(rank, 4), "history": _thin_history(history)}
 
 
 # ---------------------------------------------------------------------------
@@ -395,20 +446,29 @@ def main():
 
     cm_series, _ = safe("coinmetrics price series", fetch_coinmetrics_price_series)
 
-    ma_200w_result, realized_vol_result = None, None
+    realized_vol_result = None
     if cm_series:
-        ma_200w_result, _ = safe("200w ma compute", compute_ma_200w, cm_series)
         realized_vol_result, _ = safe("realized vol compute", compute_realized_vol, cm_series)
 
     mvrv_z_result, _ = safe("mvrv-z (bitcoin-data.com)", fetch_mvrv_z_bitcoindata)
-    realized_price_result, _ = safe("realized price (bitcoin-data.com)", fetch_realized_price_bitcoindata)
+    realized_pairs, _ = safe("realized price history (bitcoin-data.com)", fetch_realized_price_history_bitcoindata)
+    realized_price_result = None
+    if realized_pairs:
+        latest_date, latest_val = realized_pairs[-1]
+        realized_price_result = {"value": round(latest_val, 2), "asof": latest_date}
+
+    cost_basis_result = None
+    if cm_series and realized_pairs:
+        cost_basis_result, _ = safe("cost-basis history compute", compute_cost_basis_history, cm_series, realized_pairs)
 
     cg_snapshot, _ = safe("coingecko snapshot", fetch_coingecko_snapshot)
 
     cg_api_key = os.environ.get("COINGECKO_API_KEY")
-    volume_pct = None
+    volume_hist_result = None
     if cg_snapshot:
-        volume_pct, _ = safe("volume percentile", compute_volume_percentile, cg_snapshot["volume"], cg_api_key)
+        volume_hist_result, _ = safe(
+            "volume history/percentile", compute_volume_history_and_percentile, cg_snapshot["volume"], cg_api_key
+        )
 
     farside_result, _ = safe("farside etf flows", fetch_farside_etf_flows)
 
@@ -448,10 +508,27 @@ def main():
         if realized_price_result else None,
         stale=True,
     )
+
+    ma_200w_latest, ma_200w_asof = None, None
+    if cost_basis_result:
+        for d, v in zip(reversed(cost_basis_result["dates"]), reversed(cost_basis_result["ma_200w"])):
+            if v is not None:
+                ma_200w_latest, ma_200w_asof = v, d
+                break
     out["ma_200w"] = merge_field(
         data.get("ma_200w"),
-        {"value": ma_200w_result["value"], "asof": ma_200w_result["asof"], "source": "computed"}
-        if ma_200w_result else None,
+        {"value": ma_200w_latest, "asof": ma_200w_asof, "source": "computed"}
+        if ma_200w_latest is not None else None,
+        stale=True,
+    )
+
+    out["cost_basis_history"] = merge_field(
+        data.get("cost_basis_history"),
+        {
+            "value": None, "asof": cost_basis_result["dates"][-1] if cost_basis_result else None,
+            "source": "coinmetrics + bitcoin-data.com, weekly",
+            "extra": cost_basis_result,
+        } if cost_basis_result else None,
         stale=True,
     )
 
@@ -476,16 +553,22 @@ def main():
         {
             "value": realized_vol_result["value"], "asof": realized_vol_result["asof"], "source": "computed",
             "extra": {"percentile": realized_vol_result["percentile"],
-                      "dvol_fallback": dvol_result["value"] if dvol_result else None},
+                      "dvol_fallback": dvol_result["value"] if dvol_result else None,
+                      "history": realized_vol_result["history"]},
         } if realized_vol_result else None,
         stale=True,
     )
 
+    volume_extra_prev = (data.get("volume") or {}).get("extra", {})
     out["volume"] = merge_field(
         data.get("volume"),
         {
             "value": cg_snapshot["volume"], "asof": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "source": "coingecko", "extra": {"percentile": volume_pct},
+            "source": "coingecko",
+            "extra": {
+                "percentile": volume_hist_result["percentile"] if volume_hist_result else None,
+                "history": volume_hist_result["history"] if volume_hist_result else volume_extra_prev.get("history"),
+            },
         } if cg_snapshot else None,
         stale=True,
     )
@@ -494,7 +577,7 @@ def main():
         data.get("etf_flow"),
         {
             "value": farside_result["value"], "asof": farside_result["asof"], "source": "farside",
-            "extra": {"trailing_5d": farside_result["trailing_5d"], "cumulative": farside_result["cumulative"]},
+            "extra": {"history": farside_result["history"], "cumulative": farside_result["cumulative"]},
         } if farside_result else None,
         stale=True,
     )

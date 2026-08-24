@@ -89,21 +89,30 @@ function renderMvrvZ(data) {
   drawSparkline("spark-mvrv-z", f.extra?.history || []);
 }
 
-let mvrvChart = null;
-function drawSparkline(canvasId, history) {
+const chartInstances = new Map();
+
+function destroyChart(canvasId) {
+  const existing = chartInstances.get(canvasId);
+  if (existing) {
+    existing.destroy();
+    chartInstances.delete(canvasId);
+  }
+}
+
+function drawSparkline(canvasId, history, color = "#f2a900") {
+  destroyChart(canvasId);
   const canvas = document.getElementById(canvasId);
   if (!canvas || !window.Chart || !history || history.length < 2) return;
   const labels = history.map((h) => h[0]);
   const values = history.map((h) => h[1]);
-  if (mvrvChart) mvrvChart.destroy();
-  mvrvChart = new Chart(canvas, {
+  const chart = new Chart(canvas, {
     type: "line",
     data: {
       labels,
       datasets: [
         {
           data: values,
-          borderColor: "#f2a900",
+          borderColor: color,
           borderWidth: 1.5,
           pointRadius: 0,
           tension: 0.15,
@@ -119,14 +128,54 @@ function drawSparkline(canvasId, history) {
       plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: {
         x: { display: false },
-        y: {
-          display: false,
-          grid: { display: false },
-        },
+        y: { display: false, grid: { display: false } },
       },
       elements: { line: { capBezierPoints: false } },
     },
   });
+  chartInstances.set(canvasId, chart);
+}
+
+function drawMultiLineChart(canvasId, labels, series) {
+  // series: [{ label, data, color, dashed }]
+  destroyChart(canvasId);
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !window.Chart || !labels || labels.length < 2) return;
+  const chart = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: series.map((s) => ({
+        label: s.label,
+        data: s.data,
+        borderColor: s.color,
+        borderWidth: 1.5,
+        borderDash: s.dashed ? [4, 3] : undefined,
+        pointRadius: 0,
+        tension: 0.1,
+        fill: false,
+        spanGaps: true,
+      })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { intersect: false, mode: "index" },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          display: true,
+          type: "logarithmic",
+          position: "right",
+          grid: { color: "rgba(255,255,255,0.05)" },
+          ticks: { color: "#6b6d74", font: { size: 9 }, maxTicksLimit: 4 },
+        },
+      },
+    },
+  });
+  chartInstances.set(canvasId, chart);
 }
 
 function renderCostBasis(data) {
@@ -164,6 +213,27 @@ function renderCostBasis(data) {
   if (ma200wEl) ma200wEl.style.left = pos(ma200w) + "%";
 }
 
+function renderCostBasisHistory(data) {
+  const h = data?.cost_basis_history?.extra;
+  const legendEl = document.getElementById("legend-cost-basis");
+  if (!h || !h.dates || h.dates.length < 2) {
+    destroyChart("spark-cost-basis");
+    if (legendEl) legendEl.innerHTML = "";
+    return;
+  }
+  const series = [
+    { label: "现价(周)", data: h.price, color: "#f2a900" },
+    { label: "实现价", data: h.realized_price, color: "#5aa9e6" },
+    { label: "200周线", data: h.ma_200w, color: "#9a9ca3", dashed: true },
+  ];
+  drawMultiLineChart("spark-cost-basis", h.dates, series);
+  if (legendEl) {
+    legendEl.innerHTML = series
+      .map((s) => `<span class="chart-legend-item"><span class="chart-legend-swatch" style="background:${s.color}"></span>${s.label}</span>`)
+      .join("");
+  }
+}
+
 function renderLthSth() {
   ["lth", "sth"].forEach((key) => {
     const iframe = document.getElementById(`iframe-${key}`);
@@ -192,6 +262,8 @@ function renderVol(data, rtDvol) {
   let state = "neutral";
   if (rv?.extra?.percentile != null && rv.extra.percentile < 0.2) state = "signal";
   setDot("dot-vol", state);
+
+  drawSparkline("spark-realized-vol", rv?.extra?.history || [], "#5aa9e6");
 }
 
 /* ============================================================
@@ -214,6 +286,8 @@ function renderVolume(data) {
     fill.style.background = "var(--signal)";
   }
   setDot("dot-volume", state);
+
+  drawSparkline("spark-volume", v?.extra?.history || [], "#1fa35c");
 }
 
 function renderEtf(data) {
@@ -225,13 +299,13 @@ function renderEtf(data) {
   const bars = document.getElementById("etf-bars");
   if (bars) {
     bars.innerHTML = "";
-    const trailing = e?.extra?.trailing_5d || [];
-    const maxAbs = Math.max(1, ...trailing.map((d) => Math.abs(d.value)));
-    trailing.forEach((d) => {
+    const trailing = (e?.extra?.history || []).slice(-30);
+    const maxAbs = Math.max(1, ...trailing.map(([, v]) => Math.abs(v)));
+    trailing.forEach(([date, value]) => {
       const bar = document.createElement("div");
-      bar.className = "etf-bar " + (d.value >= 0 ? "pos" : "neg");
-      bar.style.height = Math.max(4, (Math.abs(d.value) / maxAbs) * 44) + "px";
-      bar.title = `${d.date}: ${d.value >= 0 ? "+" : ""}${d.value}`;
+      bar.className = "etf-bar " + (value >= 0 ? "pos" : "neg");
+      bar.style.height = Math.max(4, (Math.abs(value) / maxAbs) * 52) + "px";
+      bar.title = `${date}: ${value >= 0 ? "+" : ""}${value}`;
       bars.appendChild(bar);
     });
   }
@@ -368,6 +442,7 @@ async function boot() {
   renderTopBar(data || {});
   renderMvrvZ(data || {});
   renderCostBasis(data || {});
+  renderCostBasisHistory(data || {});
   renderLthSth();
   renderVolume(data || {});
   renderEtf(data || {});
