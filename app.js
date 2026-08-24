@@ -3,7 +3,6 @@
 const GITHUB_REPO_URL = "https://github.com/Badkido/btc-cycle-dashboard";
 
 const FETCH_TIMEOUT_MS = 8000;
-const IFRAME_TIMEOUT_MS = 6000;
 
 /* ---------------- formatters ---------------- */
 const fmtUSD = (v, digits = 0) =>
@@ -170,22 +169,6 @@ function renderLthSth() {
     const iframe = document.getElementById(`iframe-${key}`);
     const fallback = document.getElementById(`fallback-${key}`);
     if (!iframe) return;
-    let loaded = false;
-    iframe.addEventListener("load", () => {
-      loaded = true;
-    });
-    setTimeout(() => {
-      // heuristic: if iframe never fired load (blocked/network error), show fallback
-      if (!loaded) {
-        try {
-          // accessing contentWindow.location on a blocked cross-origin frame still
-          // works (it's same-origin-policy opaque, not an error) — load event is
-          // the reliable signal here.
-        } catch (e) {
-          /* ignore */
-        }
-      }
-    }, IFRAME_TIMEOUT_MS);
     iframe.addEventListener("error", () => {
       iframe.hidden = true;
       if (fallback) fallback.hidden = false;

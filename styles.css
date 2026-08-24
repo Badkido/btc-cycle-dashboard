@@ -299,24 +299,22 @@ main {
 /* ---------- iframe pair ---------- */
 .iframe-pair {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.9rem;
+  grid-template-columns: 1fr;
+  gap: 1.1rem;
 }
-@media (max-width: 700px) { .iframe-pair { grid-template-columns: 1fr; } }
 .iframe-slot { position: relative; }
 .iframe-caption { font-size: 0.72rem; color: var(--text-faint); margin: 0 0 0.35rem; }
 .iframe-slot iframe {
   width: 100%;
-  height: 260px;
+  height: 520px;
   border: 1px solid var(--border-soft);
   border-radius: 6px;
   background: #0d0e11;
 }
 .iframe-fallback {
-  height: 260px;
+  height: 520px;
   border: 1px dashed var(--border);
   border-radius: 6px;
-  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -326,6 +324,8 @@ main {
   text-align: center;
   padding: 1rem;
 }
+.iframe-fallback[hidden] { display: none; }
+.iframe-fallback:not([hidden]) { display: flex; }
 
 /* ---------- dual stat ---------- */
 .dual-stat {
