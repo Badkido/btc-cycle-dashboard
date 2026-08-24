@@ -24,7 +24,6 @@ jobs:
       - name: Run fetch.py
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
         run: python fetch.py
 
       - name: Commit data.json if changed

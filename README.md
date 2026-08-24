@@ -15,10 +15,11 @@
 
 1. **建 GitHub 仓库**，把这个目录的内容 push 上去（这个目录本身已经是独立的 git 仓库，见下方）。
 2. **设置 FRED API key（必需，否则宏观三项拿不到数据）**：去 https://fred.stlouisfed.org/docs/api/api_key.html 免费申请一个 key，然后在仓库 `Settings → Secrets and variables → Actions` 里新建 secret，名字必须是 `FRED_API_KEY`。没有这个 key，宏观三项（实际10Y/名义10Y/DXY）会保持上次的值并标记陈旧，其余指标不受影响。
-3. **（可选）设置 CoinGecko Demo API key**：CoinGecko 的历史成交量端点（算"现货成交量百分位"用的）现在要求免费的 Demo API key 才能访问，纯 keyless 免费层已经不够用了——去 https://www.coingecko.com/en/developers/dashboard 注册申请，然后把 key 存成 secret `COINGECKO_API_KEY`。不设置的话，现价/24h成交量本身不受影响（那部分仍是 keyless 的），只有"历史分位"那一格会一直是灰色空值。
-4. **开 GitHub Pages**：`Settings → Pages`，Source 选 `Deploy from a branch`，branch 选 `main` / `(root)`。
-5. **手动跑一次 Action** 把真实数据填进 `data.json`：`Actions → Update BTC cycle data → Run workflow`。跑完会自动 commit，Pages 会在几分钟内更新。
-6. 打开 `app.js` 顶部把 `GITHUB_REPO_URL` 换成你自己的仓库地址（只影响页脚"源码"链接，不影响功能）。
+3. **开 GitHub Pages**：`Settings → Pages`，Source 选 `Deploy from a branch`，branch 选 `main` / `(root)`。
+4. **手动跑一次 Action** 把真实数据填进 `data.json`：`Actions → Update BTC cycle data → Run workflow`。跑完会自动 commit，Pages 会在几分钟内更新。
+5. 打开 `app.js` 顶部把 `GITHUB_REPO_URL` 换成你自己的仓库地址（只影响页脚"源码"链接，不影响功能）。
+
+没有其他可选 key 了——ETF 流入(TFTC)、成交量(Binance)都是全自动、免费、无需注册的源，FRED 是唯一一个需要你自己申请的。
 
 ## `data.json` 契约
 
@@ -34,7 +35,7 @@ cost_basis_history — 价格/实现价/200周线三条线的周线历史，供�
                      realized_price 在 bitcoin-data.com 覆盖范围(~2022)之前、ma_200w 在满
                      200 周之前都是 null，前端按 spanGaps 处理，直接从有数据的地方开始画
 realized_vol    — 已实现波动率(30d, 年化)，extra.percentile、extra.dvol_fallback、extra.history(滚动30d序列)
-volume          — 现货成交量，extra.percentile、extra.history(需要 COINGECKO_API_KEY 才有，否则为 undefined)
+volume          — 现货成交量(Binance BTCUSDT 现货成交额，单交易所口径)，extra.percentile、extra.history
 etf_flow        — ETF 净流入(百万美元)，extra.history([date,value] 对，最多保留 90 天)、extra.cumulative
 macro           — { nominal_10y, real_10y, dxy, gold(含 extra.btc_gold_ratio) }
 saylor_holdings — 手填字段，fetch.py 不会覆盖它。参考 bitcointreasuries.net / strategy.com 公开披露自行更新
@@ -46,7 +47,7 @@ realtime_fallback — { fng, funding_rate, open_interest, dvol } 的最近一次
 ## 已知的坑
 
 - **Coin Metrics Community API 不含 `CapRealUSD`（实现市值）**：实测直接调用会返回 `403 not available with supplied credentials`——这是付费指标，免费社区层拿不到，跟最初设想的不一样。`MVRV Z-Score` 和`实现价`因此改用 [bitcoin-data.com](https://bitcoin-data.com) 的免费社区镜像 API（`/v1/mvrv-zscore`、`/v1/realized-price/last`，无需 key）。这个源history 只回溯到 2022 年左右（不是 BTC 全历史），且**免费层限速 10 请求/小时**——`fetch.py` 每次只打 2 个请求，一天一次的定时任务完全够用，但不要在本地循环反复手动跑它去测试，会被限速。Z-Score 数值口径是该源自己的算法（标准的"市值偏离实现市值的标准差数"定义，跟 0/7 常见阈值对得上），我们没有自己重新计算标准差。
-- **CoinGecko 的历史成交量端点现在要求 API key**：`/coins/bitcoin/market_chart` 实测返回 `401`，纯 keyless 免费层已经不再覆盖历史图表数据（当前现价/24h成交量的 `/coins/bitcoin` 端点仍是免费的，不受影响）。"现货成交量百分位"这一项因此改为可选，见上面部署步骤里的 `COINGECKO_API_KEY`。
+- **成交量改用 Binance 而不是 CoinGecko**：CoinGecko 的历史成交量端点(`/coins/bitcoin/market_chart`)现在要求付费的 Demo API key 才能访问，实测返回 `401`（当前现价/ATH 用的 `/coins/bitcoin` 端点本身仍是免费的，不受影响，所以现价卡片没受影响）。查了 CoinMarketCap 想换个源，结果免费层同样不含历史数据（历史数据从 $79/月的 Startup 档才开放）。最后改用 Binance 公开的 `/api/v3/klines`：完全免费、不需要 key、直接给整段每日 OHLCV，`fetch.py` 用其中的 quote volume(约等于美元成交额) 字段，分页拉 5 年历史。这样"现货成交量"这格的现值和历史线现在是同一个来源(Binance BTCUSDT 现货)，单交易所口径——跟资金费率/OI 那格一样的局限，卡片里已经加了对应的口径说明。
 - **`fapi.binance.com` 对部分云厂商 IP 返回 451（地域限制）**：GitHub Actions 的 runner IP 段偶尔会被打上这个标签，导致 `fetch.py` 里的资金费率/OI 快照抓取失败——这不影响主线数据，只影响 `realtime_fallback` 里那份兜底快照，且 `fetch.py` 对每个源都做了 try/except，失败不会污染其他字段。前端用户自己浏览器发出的实时请求走的是用户自己的 IP，通常不受影响。
 - **ETF 净流入改用 TFTC 而不是直接抓 Farside**：Farside 官网(`farside.co.uk`)本身挡在 Cloudflare 的 JS 挑战后面——实测无论加什么 User-Agent/Accept 头都拿到 `403` + "Just a moment..." 挑战页，纯 `requests`/`pandas.read_html` 抓不到，需要无头浏览器（Playwright 等）才能过，超出本项目"零依赖静态站+轻量 Action"的范围。改用 [tftc.io](https://www.tftc.io/bitcoin-etf-flows) 的公开 JSON 数据集(`https://www.tftc.io/bitcoin-etf-flows/data.json`)：CC BY 4.0 协议、无需 key、`Access-Control-Allow-Origin: *`（甚至能前端直接 fetch，只是目前仍走构建期抓取以保持架构一致），数据本身就是从 SoSoValue + Farside 披露的数字整理来的，覆盖 2024-01-11 ETF 上市至今，每天更新。`value`/`extra.history` 里的数值单位是百万美元(把 TFTC 原始的美元数值 ÷1e6 存的)。
 - **checkonchain 的 iframe** 理论上没有设 `X-Frame-Options`（否则这个方案从一开始就不成立），如果未来对方加了限制，页面会在 iframe 触发 `error` 事件时自动换成"在新标签页打开原图"的占位链接。

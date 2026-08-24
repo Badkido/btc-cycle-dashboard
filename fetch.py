@@ -318,7 +318,7 @@ def fetch_gold(btc_price):
 
 
 # ---------------------------------------------------------------------------
-# CoinGecko — spot price / ATH / drawdown / 24h volume (also used client-side)
+# CoinGecko — spot price / ATH / drawdown (keyless, still fine as of last check)
 # ---------------------------------------------------------------------------
 def fetch_coingecko_snapshot():
     url = f"{COINGECKO_BASE}/coins/bitcoin"
@@ -329,44 +329,68 @@ def fetch_coingecko_snapshot():
     price = md["current_price"]["usd"]
     ath = md["ath"]["usd"]
     ath_date = md["ath_date"]["usd"][:10]
-    volume = md["total_volume"]["usd"]
     drawdown = (price - ath) / ath
     return {
         "price": price,
         "ath": ath,
         "ath_date": ath_date,
         "drawdown_from_ath": round(drawdown, 4),
-        "volume": volume,
     }
 
 
-def compute_volume_history_and_percentile(current_volume, cg_api_key):
-    """Percentile + history using CoinGecko's daily market-chart volume.
+# ---------------------------------------------------------------------------
+# Binance spot klines — BTCUSDT daily quote volume (USD-ish), keyless.
+#
+# CoinGecko's /coins/bitcoin/market_chart (the only free source of historical
+# volume) started requiring a paid Demo API key — confirmed 401 without one.
+# CoinMarketCap's free Basic tier doesn't include historical data at all
+# (paid plans only, from $79/mo). Binance's public klines endpoint is free,
+# keyless, and gives full daily OHLCV history with no rate-limit surprises,
+# so volume here switches fully to Binance (both the "current" value and the
+# history/percentile) rather than mixing sources. Single-exchange caveat
+# applies, same as the funding-rate/OI card already discloses.
+# ---------------------------------------------------------------------------
+def fetch_binance_volume_history(days=1825):
+    url = "https://api.binance.com/api/v3/klines"
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    start_ms = now_ms - days * 24 * 3600 * 1000
+    rows = []
+    cursor = start_ms
+    for _ in range(10):  # pagination safety cap (1000 candles/call, so ~5000 days max)
+        params = {"symbol": "BTCUSDT", "interval": "1d", "startTime": cursor, "limit": 1000}
+        r = requests.get(url, params=params, headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
+        r.raise_for_status()
+        batch = r.json()
+        if not batch:
+            break
+        rows.extend(batch)
+        cursor = batch[-1][6] + 1  # next candle's start = this candle's close time + 1ms
+        if len(batch) < 1000 or cursor >= now_ms:
+            break
+    if not rows:
+        raise RuntimeError("binance klines returned no data")
 
-    VERIFIED AGAINST LIVE API: /coins/bitcoin/market_chart now returns 401
-    without a (free, registration-required) CoinGecko Demo API key — the
-    fully-keyless free tier no longer covers historical chart data. Optional
-    via COINGECKO_API_KEY secret; if absent this is skipped (volume.value
-    itself, from /coins/bitcoin, is unaffected and still keyless).
-    """
-    if not cg_api_key:
-        raise RuntimeError("COINGECKO_API_KEY not set — skipping volume history/percentile")
-    url = f"{COINGECKO_BASE}/coins/bitcoin/market_chart"
-    params = {"vs_currency": "usd", "days": "1825", "interval": "daily"}
-    headers = dict(UA_HEADERS)
-    headers["x-cg-demo-api-key"] = cg_api_key
-    r = requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
-    r.raise_for_status()
-    points = r.json().get("total_volumes", [])
-    if not points:
-        raise RuntimeError("no volume history from coingecko")
-    volumes = [v for _, v in points]
-    rank = sum(1 for v in volumes if v <= current_volume) / len(volumes)
-    history = [
-        [datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d"), round(v, 0)]
-        for ts, v in points
-    ]
-    return {"percentile": round(rank, 4), "history": _thin_history(history)}
+    history = []
+    for k in rows:
+        date_str = datetime.fromtimestamp(k[0] / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+        quote_volume = float(k[7])  # quote asset volume, i.e. ~USD notional
+        history.append((date_str, quote_volume))
+    return history
+
+
+def compute_volume_percentile(history):
+    """history: [(date_str, quote_volume), ...] from fetch_binance_volume_history()."""
+    volumes = [v for _, v in history]
+    current = volumes[-1]
+    latest_date = history[-1][0]
+    rank = sum(1 for v in volumes if v <= current) / len(volumes)
+    hist_pairs = [[d, round(v, 0)] for d, v in history]
+    return {
+        "value": round(current, 0),
+        "asof": latest_date,
+        "percentile": round(rank, 4),
+        "history": _thin_history(hist_pairs),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -448,12 +472,10 @@ def main():
 
     cg_snapshot, _ = safe("coingecko snapshot", fetch_coingecko_snapshot)
 
-    cg_api_key = os.environ.get("COINGECKO_API_KEY")
-    volume_hist_result = None
-    if cg_snapshot:
-        volume_hist_result, _ = safe(
-            "volume history/percentile", compute_volume_history_and_percentile, cg_snapshot["volume"], cg_api_key
-        )
+    binance_volume_hist, _ = safe("binance volume history", fetch_binance_volume_history)
+    volume_result = None
+    if binance_volume_hist:
+        volume_result, _ = safe("volume percentile compute", compute_volume_percentile, binance_volume_hist)
 
     etf_result, _ = safe("etf flows (tftc.io)", fetch_tftc_etf_flows)
 
@@ -544,17 +566,12 @@ def main():
         stale=True,
     )
 
-    volume_extra_prev = (data.get("volume") or {}).get("extra", {})
     out["volume"] = merge_field(
         data.get("volume"),
         {
-            "value": cg_snapshot["volume"], "asof": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "source": "coingecko",
-            "extra": {
-                "percentile": volume_hist_result["percentile"] if volume_hist_result else None,
-                "history": volume_hist_result["history"] if volume_hist_result else volume_extra_prev.get("history"),
-            },
-        } if cg_snapshot else None,
+            "value": volume_result["value"], "asof": volume_result["asof"], "source": "binance",
+            "extra": {"percentile": volume_result["percentile"], "history": volume_result["history"]},
+        } if volume_result else None,
         stale=True,
     )
 
