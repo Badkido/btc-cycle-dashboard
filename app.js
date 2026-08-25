@@ -164,7 +164,7 @@ function drawSparkline(canvasId, history, color = "#f2a900", formatValue = null)
   chartInstances.set(canvasId, chart);
 }
 
-function drawMultiLineChart(canvasId, labels, series) {
+function drawMultiLineChart(canvasId, labels, series, formatValue = null) {
   // series: [{ label, data, color, dashed }]
   destroyChart(canvasId);
   const canvas = document.getElementById(canvasId);
@@ -177,9 +177,12 @@ function drawMultiLineChart(canvasId, labels, series) {
         label: s.label,
         data: s.data,
         borderColor: s.color,
+        backgroundColor: s.color,
         borderWidth: 1.5,
         borderDash: s.dashed ? [4, 3] : undefined,
         pointRadius: 0,
+        pointHoverRadius: 3,
+        pointHoverBorderColor: "#0a0b0d",
         tension: 0.1,
         fill: false,
         spanGaps: true,
@@ -190,7 +193,29 @@ function drawMultiLineChart(canvasId, labels, series) {
       maintainAspectRatio: false,
       animation: false,
       interaction: { intersect: false, mode: "index" },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          mode: "index",
+          intersect: false,
+          displayColors: true,
+          boxWidth: 8,
+          boxHeight: 8,
+          backgroundColor: "#1d1f24",
+          borderColor: "#26282e",
+          borderWidth: 1,
+          padding: 8,
+          titleColor: "#9a9ca3",
+          titleFont: { size: 10 },
+          bodyColor: "#e8e9ec",
+          bodyFont: { size: 11 },
+          filter: (item) => item.parsed.y != null,
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${formatValue ? formatValue(ctx.parsed.y) : ctx.parsed.y}`,
+          },
+        },
+      },
       scales: {
         x: { display: false },
         y: {
@@ -254,7 +279,7 @@ function renderCostBasisHistory(data) {
     { label: "实现价", data: h.realized_price, color: "#5aa9e6" },
     { label: "200周线", data: h.ma_200w, color: "#9a9ca3", dashed: true },
   ];
-  drawMultiLineChart("spark-cost-basis", h.dates, series);
+  drawMultiLineChart("spark-cost-basis", h.dates, series, (v) => fmtUSD(v));
   if (legendEl) {
     legendEl.innerHTML = series
       .map((s) => `<span class="chart-legend-item"><span class="chart-legend-swatch" style="background:${s.color}"></span>${s.label}</span>`)
@@ -419,7 +444,11 @@ function renderTopBar(data) {
   const dd = data?.price?.extra?.drawdown_from_ath;
   setText("bg-drawdown", dd != null ? fmtPctSigned(dd, 1) : "—");
   const s = data?.saylor_holdings;
-  setText("bg-saylor", s?.value != null ? fmtBTC(s.value) + (s.asof ? ` (${s.asof})` : "") : "未填写");
+  const saylorEl = document.getElementById("bg-saylor");
+  if (saylorEl) {
+    saylorEl.textContent = s?.value != null ? fmtBTC(s.value) + (s.asof ? ` (${s.asof})` : "") : "暂无数据";
+    saylorEl.title = s?.extra?.avg_cost != null ? `平均成本约 ${fmtUSD(s.extra.avg_cost)}/BTC` : "";
+  }
 }
 
 /* ============================================================

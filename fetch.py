@@ -12,6 +12,7 @@
 import json
 import math
 import os
+import re
 import sys
 import traceback
 from datetime import datetime, timezone
@@ -331,6 +332,47 @@ def fetch_gold(btc_price):
 
 
 # ---------------------------------------------------------------------------
+# Saylor / Strategy (MSTR) BTC holdings — no official API, so this scrapes
+# the rendered number off bitcointreasuries.net's Strategy page. Unlike
+# Farside, this page is NOT behind a Cloudflare challenge — plain requests
+# get a normal 200. The BTC count is anchored to a stable, distinctive
+# marker (the "₿" balance figure), independent of the site's page layout
+# text around it. The average cost basis (bonus context for judging
+# "forced seller" risk) comes from an inline data blob further down the
+# page keyed to that same balance figure; if the site's markup changes
+# enough to break that second regex, the core BTC count still comes
+# through fine on its own — each extraction fails independently.
+# ---------------------------------------------------------------------------
+def fetch_saylor_holdings():
+    url = "https://bitcointreasuries.net/public-companies/strategy"
+    r = requests.get(url, headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    # The server doesn't send a charset in Content-Type, so requests falls back
+    # to ISO-8859-1 per the HTTP spec default and mangles the ₿ character —
+    # verified: r.encoding comes back "ISO-8859-1" while r.apparent_encoding
+    # (chardet's actual sniff) correctly says "utf-8". Force it, or the regex
+    # below silently never matches.
+    r.encoding = "utf-8"
+    html = r.text
+
+    m = re.search(r'font-btc[^>]*>₿</span>([\d,]+).{0,120}?As of ([A-Za-z]+ \d{1,2}, \d{4})', html, re.DOTALL)
+    if not m:
+        raise RuntimeError("could not find BTC balance + as-of-date marker on bitcointreasuries.net")
+    balance = int(m.group(1).replace(",", ""))
+    asof = datetime.strptime(m.group(2), "%b %d, %Y").strftime("%Y-%m-%d")
+
+    avg_cost = None
+    m2 = re.search(
+        r'balance:' + str(balance) + r',date:"[\d-]+",cost_basis:\{value:app\.decode\(.BigDecimal., "(\d+)"',
+        html,
+    )
+    if m2:
+        avg_cost = round(float(m2.group(1)) / balance, 2)
+
+    return {"value": balance, "asof": asof, "avg_cost": avg_cost}
+
+
+# ---------------------------------------------------------------------------
 # CoinGecko — spot price / ATH / drawdown (keyless, still fine as of last check)
 # ---------------------------------------------------------------------------
 def fetch_coingecko_snapshot():
@@ -467,6 +509,8 @@ def main():
     if cg_snapshot:
         gold_result, _ = safe("gold (yfinance)", fetch_gold, cg_snapshot["price"])
 
+    saylor_result, _ = safe("saylor/strategy holdings", fetch_saylor_holdings)
+
     fng_result, _ = safe("fear & greed snapshot", fetch_fng_snapshot)
     funding_oi, _ = safe("binance funding/oi", fetch_binance_funding_oi)
     funding_result, oi_result = funding_oi if funding_oi else (None, None)
@@ -580,11 +624,14 @@ def main():
         macro["gold"]["extra"] = gold_extra_prev
     out["macro"] = macro
 
-    # saylor_holdings is manual — never overwritten by this script
-    out["saylor_holdings"] = data.get("saylor_holdings", {
-        "value": None, "asof": None,
-        "note": "手填，参考 bitcointreasuries.net / strategy.com 持仓披露",
-    })
+    out["saylor_holdings"] = merge_field(
+        data.get("saylor_holdings"),
+        {
+            "value": saylor_result["value"], "asof": saylor_result["asof"], "source": "bitcointreasuries.net",
+            "extra": {"avg_cost": saylor_result["avg_cost"]},
+        } if saylor_result else None,
+        stale=True,
+    )
 
     prev_rt = data.get("realtime_fallback", {})
     out["realtime_fallback"] = {

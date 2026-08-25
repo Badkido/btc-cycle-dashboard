@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-08-25T00:59:14.488590+00:00",
+  "generated_at": "2026-08-25T05:28:17.872076+00:00",
   "mvrv_z": {
-    "value": 0.8143,
-    "asof": "2026-08-23",
+    "value": 0.8334,
+    "asof": "2026-08-24",
     "source": "bitcoin-data.com",
     "extra": {
-      "mvrv_ratio": 1.522,
+      "mvrv_ratio": 1.5345,
       "history": [
         [
           "2022-08-25",
@@ -426,10 +426,6 @@
         [
           "2024-08-22",
           1.6364
-        ],
-        [
-          "2024-08-24",
-          1.8349
         ],
         [
           "2024-08-25",
@@ -3346,14 +3342,18 @@
         [
           "2026-08-23",
           0.8143
+        ],
+        [
+          "2026-08-24",
+          0.8334
         ]
       ]
     },
     "stale": false
   },
   "realized_price": {
-    "value": 52421.33,
-    "asof": "2026-08-23",
+    "value": 52473.26,
+    "asof": "2026-08-24",
     "source": "bitcoin-data.com",
     "stale": false
   },
@@ -3364,13 +3364,13 @@
     "stale": false
   },
   "price": {
-    "value": 79784,
+    "value": 80522,
     "asof": "2026-08-25",
     "source": "coingecko",
     "extra": {
       "ath": 126080,
       "ath_date": "2025-10-06",
-      "drawdown_from_ath": -0.3672
+      "drawdown_from_ath": -0.3613
     },
     "stale": false
   },
@@ -3380,7 +3380,7 @@
     "source": "computed",
     "extra": {
       "percentile": 0.2635,
-      "dvol_fallback": 44.41,
+      "dvol_fallback": 44.22,
       "history": [
         [
           "2010-08-17",
@@ -18015,7 +18015,7 @@
         52312.89,
         52243.94,
         52421.33,
-        null
+        52473.26
       ],
       "ma_200w": [
         null,
@@ -18869,34 +18869,38 @@
       "value": 4.74,
       "asof": "2026-08-21",
       "source": "fred:DGS10",
-      "stale": false
+      "stale": true
     },
     "real_10y": {
       "value": 2.4,
       "asof": "2026-08-21",
       "source": "fred:DFII10",
-      "stale": false
+      "stale": true
     },
     "dxy": {
       "value": 118.0628,
       "asof": "2026-08-21",
       "source": "fred:DTWEXBGS",
-      "stale": false
+      "stale": true
     },
     "gold": {
-      "value": 4749.9,
-      "asof": "2026-08-24",
+      "value": 4697.1,
+      "asof": "2026-08-25",
       "source": "yfinance:GC=F",
       "extra": {
-        "btc_gold_ratio": 16.797
+        "btc_gold_ratio": 17.1429
       },
       "stale": false
     }
   },
   "saylor_holdings": {
-    "value": null,
-    "asof": null,
-    "note": "手填，参考 bitcointreasuries.net / strategy.com 持仓披露"
+    "value": 840447,
+    "asof": "2026-08-10",
+    "source": "bitcointreasuries.net",
+    "extra": {
+      "avg_cost": 75388.45
+    },
+    "stale": false
   },
   "realtime_fallback": {
     "fng": {
@@ -18905,15 +18909,15 @@
       "asof": "2026-08-25"
     },
     "funding_rate": {
-      "value": 5.633e-05,
+      "value": 0.0001,
       "asof": "2026-08-25"
     },
     "open_interest": {
-      "value": 106950.551,
+      "value": 107406.048,
       "asof": "2026-08-25"
     },
     "dvol": {
-      "value": 44.41,
+      "value": 44.22,
       "asof": "2026-08-25"
     }
   }
