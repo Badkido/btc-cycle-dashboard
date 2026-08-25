@@ -13,6 +13,11 @@ const fmtPct = (v, digits = 1) => (v == null ? "—" : (v * 100).toFixed(digits)
 const fmtPctSigned = (v, digits = 1) => (v == null ? "—" : (v >= 0 ? "+" : "") + (v * 100).toFixed(digits) + "%");
 const fmtNum = (v, digits = 2) => (v == null ? "—" : Number(v).toFixed(digits));
 const fmtBTC = (v) => (v == null ? "—" : Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }) + " BTC");
+const fmtPercentileCaption = (pct) => {
+  if (pct == null) return "";
+  const pctInt = Math.round(pct * 100);
+  return `历史分位 ${pctInt}%(高于 ${pctInt}% 的历史交易日)`;
+};
 
 function daysStale(asof) {
   if (!asof) return Infinity;
@@ -86,7 +91,7 @@ function renderMvrvZ(data) {
   else state = "red";
   setDot("dot-mvrv-z", state);
 
-  drawSparkline("spark-mvrv-z", f.extra?.history || []);
+  drawSparkline("spark-mvrv-z", f.extra?.history || [], "#f2a900", (v) => `Z = ${v.toFixed(2)}`);
 }
 
 const chartInstances = new Map();
@@ -99,7 +104,27 @@ function destroyChart(canvasId) {
   }
 }
 
-function drawSparkline(canvasId, history, color = "#f2a900") {
+function sparklineTooltip(formatValue) {
+  return {
+    enabled: true,
+    mode: "index",
+    intersect: false,
+    displayColors: false,
+    backgroundColor: "#1d1f24",
+    borderColor: "#26282e",
+    borderWidth: 1,
+    padding: 8,
+    titleColor: "#9a9ca3",
+    titleFont: { size: 10 },
+    bodyColor: "#e8e9ec",
+    bodyFont: { size: 12, weight: "bold" },
+    callbacks: {
+      label: (ctx) => (formatValue ? formatValue(ctx.parsed.y) : ctx.parsed.y),
+    },
+  };
+}
+
+function drawSparkline(canvasId, history, color = "#f2a900", formatValue = null) {
   destroyChart(canvasId);
   const canvas = document.getElementById(canvasId);
   if (!canvas || !window.Chart || !history || history.length < 2) return;
@@ -115,6 +140,9 @@ function drawSparkline(canvasId, history, color = "#f2a900") {
           borderColor: color,
           borderWidth: 1.5,
           pointRadius: 0,
+          pointHoverRadius: 3,
+          pointHoverBackgroundColor: color,
+          pointHoverBorderColor: "#0a0b0d",
           tension: 0.15,
           fill: false,
         },
@@ -124,8 +152,8 @@ function drawSparkline(canvasId, history, color = "#f2a900") {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      interaction: { intersect: false },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      interaction: { intersect: false, mode: "index" },
+      plugins: { legend: { display: false }, tooltip: sparklineTooltip(formatValue) },
       scales: {
         x: { display: false },
         y: { display: false, grid: { display: false } },
@@ -252,9 +280,7 @@ function renderLthSth() {
 function renderVol(data, rtDvol) {
   const rv = data?.realized_vol;
   setText("val-realized-vol", rv?.value != null ? fmtPct(rv.value, 1) : "—");
-  if (rv?.extra?.percentile != null) {
-    setText("pct-realized-vol", `历史分位 ${(rv.extra.percentile * 100).toFixed(0)}%`);
-  }
+  setText("pct-realized-vol", fmtPercentileCaption(rv?.extra?.percentile));
   const dvolVal = rtDvol?.value ?? rv?.extra?.dvol_fallback;
   setText("val-dvol", dvolVal != null ? dvolVal.toFixed(1) + "%" : "—");
   setAsof("asof-vol", rv?.asof, rv?.stale);
@@ -263,7 +289,7 @@ function renderVol(data, rtDvol) {
   if (rv?.extra?.percentile != null && rv.extra.percentile < 0.2) state = "signal";
   setDot("dot-vol", state);
 
-  drawSparkline("spark-realized-vol", rv?.extra?.history || [], "#5aa9e6");
+  drawSparkline("spark-realized-vol", rv?.extra?.history || [], "#5aa9e6", (v) => fmtPct(v, 1));
 }
 
 /* ============================================================
@@ -276,7 +302,7 @@ function renderVolume(data) {
   const pct = v?.extra?.percentile;
   const fill = document.getElementById("fill-volume");
   if (fill) fill.style.width = pct != null ? Math.round(pct * 100) + "%" : "0%";
-  setText("caption-volume", pct != null ? `历史分位 ${(pct * 100).toFixed(0)}%` : "");
+  setText("caption-volume", fmtPercentileCaption(pct));
 
   let state = "neutral";
   if (pct != null && pct < 0.2) {
@@ -287,7 +313,24 @@ function renderVolume(data) {
   }
   setDot("dot-volume", state);
 
-  drawSparkline("spark-volume", v?.extra?.history || [], "#1fa35c");
+  drawSparkline("spark-volume", v?.extra?.history || [], "#1fa35c", (val) => fmtUSDCompact(val));
+}
+
+let hoverTooltipEl = null;
+function showHoverTooltip(targetEl, text) {
+  if (!hoverTooltipEl) {
+    hoverTooltipEl = document.createElement("div");
+    hoverTooltipEl.className = "hover-tooltip";
+    document.body.appendChild(hoverTooltipEl);
+  }
+  hoverTooltipEl.textContent = text;
+  hoverTooltipEl.style.display = "block";
+  const rect = targetEl.getBoundingClientRect();
+  hoverTooltipEl.style.left = rect.left + rect.width / 2 + "px";
+  hoverTooltipEl.style.top = rect.top - 8 + "px";
+}
+function hideHoverTooltip() {
+  if (hoverTooltipEl) hoverTooltipEl.style.display = "none";
 }
 
 function renderEtf(data) {
@@ -305,7 +348,9 @@ function renderEtf(data) {
       const bar = document.createElement("div");
       bar.className = "etf-bar " + (value >= 0 ? "pos" : "neg");
       bar.style.height = Math.max(4, (Math.abs(value) / maxAbs) * 52) + "px";
-      bar.title = `${date}: ${value >= 0 ? "+" : ""}${value}`;
+      const label = `${date}: ${value >= 0 ? "+" : "-"}${fmtUSDCompact(Math.abs(value) * 1e6)}`;
+      bar.addEventListener("mouseenter", () => showHoverTooltip(bar, label));
+      bar.addEventListener("mouseleave", hideHoverTooltip);
       bars.appendChild(bar);
     });
   }

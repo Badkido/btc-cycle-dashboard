@@ -381,10 +381,28 @@ main {
   min-height: 3px;
   position: relative;
 }
-.etf-bar.pos { background: var(--green); align-self: flex-end; }
-.etf-bar.neg { background: var(--red); align-self: flex-start; }
+.etf-bar.pos { background: var(--green); align-self: flex-end; cursor: default; }
+.etf-bar.neg { background: var(--red); align-self: flex-start; cursor: default; }
 .etf-cumulative { font-size: 0.75rem; color: var(--text-dim); }
 .etf-cumulative span { font-weight: 700; color: var(--text); }
+
+.hover-tooltip {
+  position: fixed;
+  display: none;
+  transform: translate(-50%, -100%);
+  background: #1d1f24;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 0.3rem 0.55rem;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
 
 /* ---------- fng ---------- */
 .fng-label { font-size: 0.85rem; color: var(--text-dim); margin-top: 0.2rem; }
