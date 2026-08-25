@@ -287,16 +287,41 @@ function renderCostBasisHistory(data) {
   }
 }
 
-function renderLthSth() {
-  ["lth", "sth"].forEach((key) => {
-    const iframe = document.getElementById(`iframe-${key}`);
-    const fallback = document.getElementById(`fallback-${key}`);
-    if (!iframe) return;
-    iframe.addEventListener("error", () => {
-      iframe.hidden = true;
-      if (fallback) fallback.hidden = false;
-    });
-  });
+function renderLthSthMvrv(data) {
+  const f = data?.lth_sth_mvrv_history;
+  const h = f?.extra;
+  setText("val-lth-mvrv", h?.lth_mvrv?.length ? `${h.lth_mvrv[h.lth_mvrv.length - 1].toFixed(2)}x` : "—");
+  setText("val-sth-mvrv", h?.sth_mvrv?.length ? `${h.sth_mvrv[h.sth_mvrv.length - 1].toFixed(2)}x` : "—");
+  setAsof("asof-lth-sth", f?.asof, f?.stale);
+
+  const legendEl = document.getElementById("legend-lth-sth");
+  if (!h || !h.dates || h.dates.length < 2) {
+    destroyChart("spark-lth-sth");
+    if (legendEl) legendEl.innerHTML = "";
+    setDot("dot-lth-sth", "neutral");
+    return;
+  }
+
+  const series = [
+    { label: "LTH-MVRV", data: h.lth_mvrv, color: "#f2a900" },
+    { label: "STH-MVRV", data: h.sth_mvrv, color: "#5aa9e6" },
+  ];
+  drawMultiLineChart("spark-lth-sth", h.dates, series, (v) => `${v.toFixed(2)}x`);
+  if (legendEl) {
+    legendEl.innerHTML = series
+      .map((s) => `<span class="chart-legend-item"><span class="chart-legend-swatch" style="background:${s.color}"></span>${s.label}</span>`)
+      .join("");
+  }
+
+  const lthLast = h.lth_mvrv[h.lth_mvrv.length - 1];
+  const sthLast = h.sth_mvrv[h.sth_mvrv.length - 1];
+  let state = "neutral";
+  if (lthLast != null && sthLast != null) {
+    const gap = Math.abs(lthLast - sthLast);
+    if (gap < 0.15) state = "green";
+    else if (gap > 1) state = "orange";
+  }
+  setDot("dot-lth-sth", state);
 }
 
 /* ============================================================
@@ -517,7 +542,7 @@ async function boot() {
   renderMvrvZ(data || {});
   renderCostBasis(data || {});
   renderCostBasisHistory(data || {});
-  renderLthSth();
+  renderLthSthMvrv(data || {});
   renderVolume(data || {});
   renderEtf(data || {});
   renderMacro(data || {});

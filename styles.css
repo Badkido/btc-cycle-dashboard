@@ -110,12 +110,10 @@ main {
   gap: 1rem;
 }
 .card-hero { grid-row: 1 / 3; }
-.card-wide { grid-column: 1 / 3; }
 
 @media (max-width: 880px) {
   .spine-grid { grid-template-columns: 1fr; }
   .card-hero { grid-row: auto; }
-  .card-wide { grid-column: 1; }
   .grid-2 { grid-template-columns: 1fr; }
   .top-bar { flex-direction: column; align-items: flex-start; }
 }
@@ -307,36 +305,6 @@ main {
 .cost-num-label { font-size: 0.68rem; color: var(--text-faint); }
 .cost-num-value { font-size: 0.95rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* ---------- iframe pair ---------- */
-.iframe-pair {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.1rem;
-}
-.iframe-slot { position: relative; }
-.iframe-caption { font-size: 0.72rem; color: var(--text-faint); margin: 0 0 0.35rem; }
-.iframe-slot iframe {
-  width: 100%;
-  height: 520px;
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: #0d0e11;
-}
-.iframe-fallback {
-  height: 520px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-size: 0.78rem;
-  color: var(--text-faint);
-  text-align: center;
-  padding: 1rem;
-}
-.iframe-fallback[hidden] { display: none; }
-.iframe-fallback:not([hidden]) { display: flex; }
 
 /* ---------- dual stat ---------- */
 .dual-stat {

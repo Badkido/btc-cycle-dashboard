@@ -89,33 +89,31 @@
         </footer>
       </article>
 
-      <article class="card card-wide" data-card="lth-sth">
+      <article class="card" data-card="lth-sth">
         <header class="card-head">
-          <h3>LTH-MVRV / STH-MVRV 收敛<span class="info-dot" tabindex="0" data-tip="看两条线是在收口(换手完成)还是张口(分发未完)，不用看具体数字。">?</span></h3>
+          <h3>LTH-MVRV / STH-MVRV 收敛<span class="info-dot" tabindex="0" data-tip="两条线的间距就是收敛程度：收口(换手完成)还是张口(分发未完)，不用看具体数字。">?</span></h3>
+          <span class="status-dot" id="dot-lth-sth"></span>
         </header>
-        <div class="card-body iframe-pair">
-          <div class="iframe-slot">
-            <p class="iframe-caption">LTH-MVRV(长期持有者)</p>
-            <iframe id="iframe-lth" title="LTH-MVRV" loading="lazy" referrerpolicy="no-referrer"
-              src="https://charts.checkonchain.com/btconchain/unrealised/mvrv_lth/mvrv_lth_dark.html"></iframe>
-            <div class="iframe-fallback" id="fallback-lth" hidden>
-              <p>图表被来源站点的 iframe 策略拦截。</p>
-              <a href="https://charts.checkonchain.com/btconchain/unrealised/mvrv_lth/mvrv_lth_dark.html" target="_blank" rel="noopener noreferrer">在新标签页打开原图 →</a>
+        <div class="card-body">
+          <div class="dual-stat">
+            <div class="stat-block">
+              <span class="stat-label">LTH-MVRV(长期持有者)</span>
+              <span class="stat-value" id="val-lth-mvrv">—</span>
+            </div>
+            <div class="stat-block">
+              <span class="stat-label">STH-MVRV(短期持有者)</span>
+              <span class="stat-value" id="val-sth-mvrv">—</span>
             </div>
           </div>
-          <div class="iframe-slot">
-            <p class="iframe-caption">STH-MVRV(短期持有者)</p>
-            <iframe id="iframe-sth" title="STH-MVRV" loading="lazy" referrerpolicy="no-referrer"
-              src="https://charts.checkonchain.com/btconchain/unrealised/sthmvrv_indicator/sthmvrv_indicator_dark.html"></iframe>
-            <div class="iframe-fallback" id="fallback-sth" hidden>
-              <p>图表被来源站点的 iframe 策略拦截。</p>
-              <a href="https://charts.checkonchain.com/btconchain/unrealised/sthmvrv_indicator/sthmvrv_indicator_dark.html" target="_blank" rel="noopener noreferrer">在新标签页打开原图 →</a>
-            </div>
+          <div class="sparkline-wrap sparkline-wrap-md">
+            <canvas id="spark-lth-sth"></canvas>
           </div>
+          <div class="chart-legend" id="legend-lth-sth"></div>
         </div>
         <p class="interpretation">长/短期持有者盈利水平收口 = 换手完成、卖压枯竭 = 底部确认；张口 = 分发未完、可能还需一波卖出。这一格看形态即可。</p>
         <footer class="card-foot">
-          <span class="source">Charts by <a href="https://checkonchain.com" target="_blank" rel="noopener noreferrer">checkonchain.com</a></span>
+          <span class="asof" id="asof-lth-sth">—</span>
+          <span class="source">bitcoin-data.com · <a href="https://checkonchain.com/btconchain/unrealised/mvrv_lth/" target="_blank" rel="noopener noreferrer">完整版看 checkonchain</a></span>
         </footer>
       </article>
 

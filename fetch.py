@@ -172,6 +172,49 @@ def fetch_realized_price_history_bitcoindata():
     return [(row["d"], float(row["realizedPrice"])) for row in rows]
 
 
+def fetch_lth_mvrv_bitcoindata():
+    r = requests.get(f"{BITCOIN_DATA_BASE}/lth-mvrv", headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list) or not rows:
+        raise RuntimeError("bitcoin-data.com lth-mvrv returned no data")
+    rows.sort(key=lambda row: row["d"])
+    return [(row["d"], float(row["lthMvrv"])) for row in rows]
+
+
+def fetch_sth_mvrv_bitcoindata():
+    r = requests.get(f"{BITCOIN_DATA_BASE}/sth-mvrv", headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list) or not rows:
+        raise RuntimeError("bitcoin-data.com sth-mvrv returned no data")
+    rows.sort(key=lambda row: row["d"])
+    return [(row["d"], float(row["sthMvrv"])) for row in rows]
+
+
+def compute_lth_sth_mvrv_history(lth_pairs, sth_pairs):
+    """Both series cover the same ~4-year window (bitcoin-data.com's history
+    depth), so this is a straight union-of-dates align rather than the
+    weekly-resample trick cost-basis needed to bridge full-history price
+    against a shorter realized-price range."""
+    lth_map = dict(lth_pairs)
+    sth_map = dict(sth_pairs)
+    dates = sorted(set(lth_map) | set(sth_map))
+    if len(dates) < 30:
+        raise RuntimeError("not enough overlapping LTH/STH-MVRV history")
+    lth_series = [round(lth_map[d], 4) if d in lth_map else None for d in dates]
+    sth_series = [round(sth_map[d], 4) if d in sth_map else None for d in dates]
+
+    if len(dates) <= 730:
+        return {"dates": dates, "lth_mvrv": lth_series, "sth_mvrv": sth_series}
+    cut = len(dates) - 730
+    return {
+        "dates": dates[:cut][::7] + dates[cut:],
+        "lth_mvrv": lth_series[:cut][::7] + lth_series[cut:],
+        "sth_mvrv": sth_series[:cut][::7] + sth_series[cut:],
+    }
+
+
 def _weekly_resample(daily_pairs):
     """[(date_str, value), ...] -> {(iso_year, iso_week): (date_str, value)},
     keeping the last value seen in each ISO week."""
@@ -490,6 +533,12 @@ def main():
     if cm_series and realized_pairs:
         cost_basis_result, _ = safe("cost-basis history compute", compute_cost_basis_history, cm_series, realized_pairs)
 
+    lth_pairs, _ = safe("lth-mvrv (bitcoin-data.com)", fetch_lth_mvrv_bitcoindata)
+    sth_pairs, _ = safe("sth-mvrv (bitcoin-data.com)", fetch_sth_mvrv_bitcoindata)
+    lth_sth_result = None
+    if lth_pairs and sth_pairs:
+        lth_sth_result, _ = safe("lth/sth-mvrv history compute", compute_lth_sth_mvrv_history, lth_pairs, sth_pairs)
+
     cg_snapshot, _ = safe("coingecko snapshot", fetch_coingecko_snapshot)
 
     volume_result = None
@@ -557,6 +606,16 @@ def main():
             "source": "coinmetrics + bitcoin-data.com, weekly",
             "extra": cost_basis_result,
         } if cost_basis_result else None,
+        stale=True,
+    )
+
+    out["lth_sth_mvrv_history"] = merge_field(
+        data.get("lth_sth_mvrv_history"),
+        {
+            "value": None, "asof": lth_sth_result["dates"][-1] if lth_sth_result else None,
+            "source": "bitcoin-data.com",
+            "extra": lth_sth_result,
+        } if lth_sth_result else None,
         stale=True,
     )
 

@@ -37,6 +37,8 @@ cost_basis_history — 价格/实现价/200周线三条线的周线历史，供�
 realized_vol    — 已实现波动率(30d, 年化)，extra.percentile、extra.dvol_fallback、extra.history(滚动30d序列)
 volume          — 现货成交量(Coin Metrics volume_reported_spot_usd_1d，跨交易所汇总口径)，extra.percentile、extra.history
 etf_flow        — ETF 净流入(百万美元)，extra.history([date,value] 对，最多保留 90 天)、extra.cumulative
+lth_sth_mvrv_history — LTH-MVRV / STH-MVRV 收敛图数据，来自 bitcoin-data.com：
+                     { dates, lth_mvrv, sth_mvrv } 三个等长数组(日频，~2022 至今)
 macro           — { nominal_10y, real_10y, dxy, gold(含 extra.btc_gold_ratio) }
 saylor_holdings — Saylor/Strategy(MSTR)持仓，自动抓取 bitcointreasuries.net，extra.avg_cost 是持仓平均成本
 realtime_fallback — { fng, funding_rate, open_interest, dvol } 的最近一次快照，仅用作客户端实时请求失败时的兜底
@@ -46,12 +48,12 @@ realtime_fallback — { fng, funding_rate, open_interest, dvol } 的最近一次
 
 ## 已知的坑
 
-- **Coin Metrics Community API 不含 `CapRealUSD`（实现市值）**：实测直接调用会返回 `403 not available with supplied credentials`——这是付费指标，免费社区层拿不到，跟最初设想的不一样。`MVRV Z-Score` 和`实现价`因此改用 [bitcoin-data.com](https://bitcoin-data.com) 的免费社区镜像 API（`/v1/mvrv-zscore`、`/v1/realized-price/last`，无需 key）。这个源history 只回溯到 2022 年左右（不是 BTC 全历史），且**免费层限速 10 请求/小时**——`fetch.py` 每次只打 2 个请求，一天一次的定时任务完全够用，但不要在本地循环反复手动跑它去测试，会被限速。Z-Score 数值口径是该源自己的算法（标准的"市值偏离实现市值的标准差数"定义，跟 0/7 常见阈值对得上），我们没有自己重新计算标准差。
+- **Coin Metrics Community API 不含 `CapRealUSD`（实现市值）**：实测直接调用会返回 `403 not available with supplied credentials`——这是付费指标，免费社区层拿不到，跟最初设想的不一样。`MVRV Z-Score` 和`实现价`因此改用 [bitcoin-data.com](https://bitcoin-data.com) 的免费社区镜像 API（无需 key）。这个源 history 只回溯到 2022 年左右（不是 BTC 全历史），且**免费层限速 10 请求/小时**——`fetch.py` 每次会打 4 个请求（`mvrv-zscore`、`realized-price`、`lth-mvrv`、`sth-mvrv`），一天一次的定时任务完全够用，但不要在本地循环反复手动跑它去测试，会被限速。Z-Score 数值口径是该源自己的算法（标准的"市值偏离实现市值的标准差数"定义，跟 0/7 常见阈值对得上），我们没有自己重新计算标准差。
 - **成交量最终改用 Coin Metrics，中间绕了两次弯路**：CoinGecko 的历史成交量端点(`/coins/bitcoin/market_chart`)现在要求付费的 Demo API key，实测 `401`（当前现价/ATH 用的 `/coins/bitcoin` 端点本身仍免费，不受影响）。查了 CoinMarketCap 想换源，免费层同样不含历史数据（历史数据从 $79/月的 Startup 档才开放）。改用 Binance 公开的 `/api/v3/klines` 本地测试完全没问题，一推到 GitHub Actions 才发现 `api.binance.com` 对 runner 的 IP 段也返回 `451`(地域限制)——跟资金费率/OI 那个 `fapi.binance.com` 是同一类问题，只是这次挡住的是核心历史字段，不是无关紧要的 fallback。最后发现其实不用舍近求远：Coin Metrics 社区免费层本来就有 `volume_reported_spot_usd_1d`（跨交易所汇总口径，2010-07-18 至今，`catalog-v2` 确认 `"community": true`），干脆跟 `PriceUSD` 一起在同一个请求里拉回来，不再多打一次 API。比 Binance 方案还更好——是全市场口径而不是单交易所，也不会有地域限制的风险。
 - **`fapi.binance.com` 对部分云厂商 IP 返回 451（地域限制）**：GitHub Actions 的 runner IP 段偶尔会被打上这个标签，导致 `fetch.py` 里的资金费率/OI 快照抓取失败——这不影响主线数据，只影响 `realtime_fallback` 里那份兜底快照，且 `fetch.py` 对每个源都做了 try/except，失败不会污染其他字段。前端用户自己浏览器发出的实时请求走的是用户自己的 IP，通常不受影响。
 - **ETF 净流入改用 TFTC 而不是直接抓 Farside**：Farside 官网(`farside.co.uk`)本身挡在 Cloudflare 的 JS 挑战后面——实测无论加什么 User-Agent/Accept 头都拿到 `403` + "Just a moment..." 挑战页，纯 `requests`/`pandas.read_html` 抓不到，需要无头浏览器（Playwright 等）才能过，超出本项目"零依赖静态站+轻量 Action"的范围。改用 [tftc.io](https://www.tftc.io/bitcoin-etf-flows) 的公开 JSON 数据集(`https://www.tftc.io/bitcoin-etf-flows/data.json`)：CC BY 4.0 协议、无需 key、`Access-Control-Allow-Origin: *`（甚至能前端直接 fetch，只是目前仍走构建期抓取以保持架构一致），数据本身就是从 SoSoValue + Farside 披露的数字整理来的，覆盖 2024-01-11 ETF 上市至今，每天更新。`value`/`extra.history` 里的数值单位是百万美元(把 TFTC 原始的美元数值 ÷1e6 存的)。
 - **Saylor/Strategy 持仓改自动抓取，不用手填了**：最初设计是手填字段，后来发现 bitcointreasuries.net 的 Strategy 页面(`/public-companies/strategy`)没有 Cloudflare 挡着，直接 `requests` 就能拿到 200，页面渲染出的 HTML 里能稳定用正则抓到持仓数字和旁边"As of Aug 10, 2026"这样的日期文案（锚定在页面上那个显眼的"₿840,447"标记附近，不依赖具体文案措辞）。踩了一个坑：服务器返回的 `Content-Type` 没带 charset，`requests` 按 HTTP 规范默认退回 `ISO-8859-1` 解码（尽管 `r.apparent_encoding` 明明正确识别成 `utf-8`），导致页面里的"₿"被解码成乱码 `â¿`，正则死活匹配不上——加一行 `r.encoding = "utf-8"` 强制指定就好了。持仓均价(`extra.avg_cost`)来自页面里嵌的另一段数据（一个跟同一个持仓数字绑定的内联数据块），是独立的第二个正则，失败不影响持仓数字本身照常抓取。这终究是"解析别人网站渲染出来的 HTML"，不是官方 API，页面改版就可能要跟着更新正则；失败时保留上次值并标 `stale`，跟前面所有字段一个规则。
-- **checkonchain 的 iframe** 理论上没有设 `X-Frame-Options`（否则这个方案从一开始就不成立），如果未来对方加了限制，页面会在 iframe 触发 `error` 事件时自动换成"在新标签页打开原图"的占位链接。
+- **LTH-MVRV / STH-MVRV 不再用 checkonchain 的 iframe 了**：最初是嵌两张 checkonchain 的完整图表页，但那是两张各自独立的图（各自还带了 SOPR、AVIV、成本价带等好几条额外的线），"两条线收口/张口"这个卡片本来的核心诉求——没法从两张分开的图里直接看出来，需要自己脑内比较。改成直接从 bitcoin-data.com 拉 `lth-mvrv`/`sth-mvrv`(跟 MVRV-Z 同一个源，日频，~2022 至今)自己画一张两线叠加图，间距就是收敛程度，一眼可读。footer 留了个链接到 checkonchain 的原图，想看 SOPR/AVIV/成本价这些细节还是能点过去。
 - **MVRV Z-Score 口径**：见上面 bitcoin-data.com 那条——现在是消费第三方已经算好的值，不是本项目自己用全历史累计标准差重新计算的（免费数据源拿不到算这个所需的原始 `CapRealUSD`）。跟某些其他第三方版本数值对不上，属于口径/数据源差异，不是 bug。
 
 ## 本地跑一次抓取脚本
