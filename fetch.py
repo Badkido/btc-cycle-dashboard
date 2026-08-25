@@ -60,7 +60,7 @@ def safe(label, fn, *args, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# Coin Metrics Community API — PriceUSD only.
+# Coin Metrics Community API — PriceUSD + volume_reported_spot_usd_1d.
 # https://docs.coinmetrics.io/api/v4/ — community endpoints need no API key,
 # rate limit ~10 req / 6s per IP.
 #
@@ -70,14 +70,24 @@ def safe(label, fn, *args, **kwargs):
 # gated behind Coin Metrics' paid plans. That makes it impossible to compute
 # MVRV-Z or realized price from Coin Metrics without a paid key, contrary to
 # the original plan. See fetch_mvrv_z_bitcoindata() / fetch_realized_price_history_bitcoindata()
-# below for the substitute free source. Coin Metrics is kept only for the
-# full daily price history used in the 200w MA and realized-vol calcs.
+# below for the substitute free source.
+#
+# volume_reported_spot_usd_1d, by contrast, IS free on the community tier
+# (catalog confirms "community": true, full history since 2010-07-18) — an
+# aggregate reported spot volume across exchanges, which is both a better
+# methodology and a more reliable source than the alternatives tried here:
+# CoinGecko's historical endpoint now needs a paid Demo API key (401
+# without one); CoinMarketCap's free Basic tier excludes historical data
+# entirely; Binance's public klines are free and keyless but 451-blocked
+# from GitHub Actions' runner IPs (same block already hit on the futures
+# funding-rate endpoint). Coin Metrics has neither problem and we're
+# already calling it for price, so volume rides along in the same request.
 # ---------------------------------------------------------------------------
 def fetch_coinmetrics_price_series():
     url = f"{COINMETRICS_BASE}/timeseries/asset-metrics"
     params = {
         "assets": "btc",
-        "metrics": "PriceUSD",
+        "metrics": "PriceUSD,volume_reported_spot_usd_1d",
         "frequency": "1d",
         "page_size": 10000,
         "start_time": "2010-07-01T00:00:00Z",
@@ -99,9 +109,12 @@ def fetch_coinmetrics_price_series():
     clean = []
     for row in out:
         try:
-            clean.append({"date": row["time"][:10], "price": float(row["PriceUSD"])})
+            entry = {"date": row["time"][:10], "price": float(row["PriceUSD"])}
         except (TypeError, KeyError, ValueError):
             continue
+        vol = row.get("volume_reported_spot_usd_1d")
+        entry["volume"] = float(vol) if vol not in (None, "") else None
+        clean.append(entry)
     if len(clean) < 1500:
         raise RuntimeError(f"coinmetrics returned too few clean rows ({len(clean)})")
     clean.sort(key=lambda r: r["date"])
@@ -338,53 +351,18 @@ def fetch_coingecko_snapshot():
     }
 
 
-# ---------------------------------------------------------------------------
-# Binance spot klines — BTCUSDT daily quote volume (USD-ish), keyless.
-#
-# CoinGecko's /coins/bitcoin/market_chart (the only free source of historical
-# volume) started requiring a paid Demo API key — confirmed 401 without one.
-# CoinMarketCap's free Basic tier doesn't include historical data at all
-# (paid plans only, from $79/mo). Binance's public klines endpoint is free,
-# keyless, and gives full daily OHLCV history with no rate-limit surprises,
-# so volume here switches fully to Binance (both the "current" value and the
-# history/percentile) rather than mixing sources. Single-exchange caveat
-# applies, same as the funding-rate/OI card already discloses.
-# ---------------------------------------------------------------------------
-def fetch_binance_volume_history(days=1825):
-    url = "https://api.binance.com/api/v3/klines"
-    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-    start_ms = now_ms - days * 24 * 3600 * 1000
-    rows = []
-    cursor = start_ms
-    for _ in range(10):  # pagination safety cap (1000 candles/call, so ~5000 days max)
-        params = {"symbol": "BTCUSDT", "interval": "1d", "startTime": cursor, "limit": 1000}
-        r = requests.get(url, params=params, headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
-        r.raise_for_status()
-        batch = r.json()
-        if not batch:
-            break
-        rows.extend(batch)
-        cursor = batch[-1][6] + 1  # next candle's start = this candle's close time + 1ms
-        if len(batch) < 1000 or cursor >= now_ms:
-            break
+def compute_volume_percentile(cm_series):
+    """Uses volume_reported_spot_usd_1d already pulled alongside price in
+    fetch_coinmetrics_price_series() — see that function's docstring for why
+    this replaced the CoinGecko/CoinMarketCap/Binance attempts."""
+    rows = [(r["date"], r["volume"]) for r in cm_series if r.get("volume") is not None]
     if not rows:
-        raise RuntimeError("binance klines returned no data")
-
-    history = []
-    for k in rows:
-        date_str = datetime.fromtimestamp(k[0] / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
-        quote_volume = float(k[7])  # quote asset volume, i.e. ~USD notional
-        history.append((date_str, quote_volume))
-    return history
-
-
-def compute_volume_percentile(history):
-    """history: [(date_str, quote_volume), ...] from fetch_binance_volume_history()."""
-    volumes = [v for _, v in history]
+        raise RuntimeError("no volume data in coinmetrics series")
+    volumes = [v for _, v in rows]
     current = volumes[-1]
-    latest_date = history[-1][0]
+    latest_date = rows[-1][0]
     rank = sum(1 for v in volumes if v <= current) / len(volumes)
-    hist_pairs = [[d, round(v, 0)] for d, v in history]
+    hist_pairs = [[d, round(v, 0)] for d, v in rows]
     return {
         "value": round(current, 0),
         "asof": latest_date,
@@ -472,10 +450,9 @@ def main():
 
     cg_snapshot, _ = safe("coingecko snapshot", fetch_coingecko_snapshot)
 
-    binance_volume_hist, _ = safe("binance volume history", fetch_binance_volume_history)
     volume_result = None
-    if binance_volume_hist:
-        volume_result, _ = safe("volume percentile compute", compute_volume_percentile, binance_volume_hist)
+    if cm_series:
+        volume_result, _ = safe("volume percentile compute", compute_volume_percentile, cm_series)
 
     etf_result, _ = safe("etf flows (tftc.io)", fetch_tftc_etf_flows)
 
@@ -569,7 +546,7 @@ def main():
     out["volume"] = merge_field(
         data.get("volume"),
         {
-            "value": volume_result["value"], "asof": volume_result["asof"], "source": "binance",
+            "value": volume_result["value"], "asof": volume_result["asof"], "source": "coinmetrics",
             "extra": {"percentile": volume_result["percentile"], "history": volume_result["history"]},
         } if volume_result else None,
         stale=True,
