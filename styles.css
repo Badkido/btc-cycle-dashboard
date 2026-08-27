@@ -106,14 +106,13 @@ main {
 .spine-grid {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
-  grid-template-rows: auto auto;
   gap: 1rem;
 }
-.card-hero { grid-row: 1 / 3; }
+.card-wide { grid-column: 1 / 3; }
 
 @media (max-width: 880px) {
   .spine-grid { grid-template-columns: 1fr; }
-  .card-hero { grid-row: auto; }
+  .card-wide { grid-column: 1; }
   .grid-2 { grid-template-columns: 1fr; }
   .top-bar { flex-direction: column; align-items: flex-start; }
 }
