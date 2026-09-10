@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-09T11:26:01.863809+00:00",
+  "generated_at": "2026-09-10T11:22:17.975030+00:00",
   "mvrv_z": {
     "value": 0.8725,
     "asof": "2026-09-08",
@@ -3349,38 +3349,38 @@
         ]
       ]
     },
-    "stale": false
+    "stale": true
   },
   "realized_price": {
     "value": 52760.15,
     "asof": "2026-09-08",
     "source": "bitcoin-data.com",
-    "stale": false
+    "stale": true
   },
   "ma_200w": {
     "value": 65170.67,
     "asof": "2026-09-08",
     "source": "computed",
-    "stale": false
+    "stale": true
   },
   "price": {
-    "value": 78835,
-    "asof": "2026-09-09",
+    "value": 77923,
+    "asof": "2026-09-10",
     "source": "coingecko",
     "extra": {
       "ath": 126080,
       "ath_date": "2025-10-06",
-      "drawdown_from_ath": -0.3747
+      "drawdown_from_ath": -0.382
     },
     "stale": false
   },
   "realized_vol": {
-    "value": 0.4757,
-    "asof": "2026-09-08",
+    "value": 0.4709,
+    "asof": "2026-09-09",
     "source": "computed",
     "extra": {
-      "percentile": 0.3325,
-      "dvol_fallback": 40.68,
+      "percentile": 0.3221,
+      "dvol_fallback": 39.23,
       "history": [
         [
           "2010-08-17",
@@ -6319,10 +6319,6 @@
           0.6612
         ],
         [
-          "2024-09-09",
-          0.4937
-        ],
-        [
           "2024-09-10",
           0.4815
         ],
@@ -9237,17 +9233,21 @@
         [
           "2026-09-08",
           0.4757
+        ],
+        [
+          "2026-09-09",
+          0.4709
         ]
       ]
     },
     "stale": false
   },
   "volume": {
-    "value": 8615462632.0,
-    "asof": "2026-09-08",
+    "value": 7978420844.0,
+    "asof": "2026-09-09",
     "source": "coinmetrics",
     "extra": {
-      "percentile": 0.7487,
+      "percentile": 0.7328,
       "history": [
         [
           "2010-07-18",
@@ -12206,10 +12206,6 @@
           6829908238.0
         ],
         [
-          "2024-09-09",
-          14170268042.0
-        ],
-        [
           "2024-09-10",
           12122066017.0
         ],
@@ -15124,21 +15120,21 @@
         [
           "2026-09-08",
           8615462632.0
+        ],
+        [
+          "2026-09-09",
+          7978420844.0
         ]
       ]
     },
     "stale": false
   },
   "etf_flow": {
-    "value": -46.65,
-    "asof": "2026-09-08",
+    "value": -120.24,
+    "asof": "2026-09-09",
     "source": "tftc.io",
     "extra": {
       "history": [
-        [
-          "2026-04-30",
-          14.76
-        ],
         [
           "2026-05-01",
           629.73
@@ -15494,9 +15490,13 @@
         [
           "2026-09-08",
           -46.65
+        ],
+        [
+          "2026-09-09",
+          -120.24
         ]
       ],
-      "cumulative": 55540.7
+      "cumulative": 55420.4
     },
     "stale": false
   },
@@ -18890,18 +18890,18 @@
         65170.67
       ]
     },
-    "stale": false
+    "stale": true
   },
   "macro": {
     "nominal_10y": {
-      "value": 4.78,
-      "asof": "2026-09-04",
+      "value": 4.8,
+      "asof": "2026-09-08",
       "source": "fred:DGS10",
       "stale": false
     },
     "real_10y": {
       "value": 2.43,
-      "asof": "2026-09-04",
+      "asof": "2026-09-08",
       "source": "fred:DFII10",
       "stale": false
     },
@@ -18912,11 +18912,11 @@
       "stale": false
     },
     "gold": {
-      "value": 4445.4,
-      "asof": "2026-09-09",
+      "value": 4418.2,
+      "asof": "2026-09-10",
       "source": "yfinance:GC=F",
       "extra": {
-        "btc_gold_ratio": 17.7341
+        "btc_gold_ratio": 17.6368
       },
       "stale": false
     }
@@ -18932,9 +18932,9 @@
   },
   "realtime_fallback": {
     "fng": {
-      "value": 66,
+      "value": 69,
       "classification": "Greed",
-      "asof": "2026-09-09"
+      "asof": "2026-09-10"
     },
     "funding_rate": {
       "value": 7.802e-05,
@@ -18945,8 +18945,8 @@
       "asof": "2026-08-25"
     },
     "dvol": {
-      "value": 40.68,
-      "asof": "2026-09-09"
+      "value": 39.23,
+      "asof": "2026-09-10"
     }
   },
   "lth_sth_mvrv_history": {
@@ -21466,6 +21466,6 @@
         1.1
       ]
     },
-    "stale": false
+    "stale": true
   }
 }
