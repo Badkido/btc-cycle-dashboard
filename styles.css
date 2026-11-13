@@ -230,6 +230,17 @@ main {
   font-size: 0.68rem;
   color: var(--text-faint);
 }
+.live-links {
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.8rem;
+}
+.live-links a { font-weight: 600; }
+.live-links-src { opacity: 0.8; }
 .chart-legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
 .chart-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 
