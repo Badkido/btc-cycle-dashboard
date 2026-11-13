@@ -293,6 +293,9 @@ main {
 .cost-marker-price .cost-marker-label { color: var(--accent); font-weight: 700; }
 .cost-marker-realized { background: var(--signal); }
 .cost-marker-200w { background: var(--text-dim); }
+/* price and the 200w line can sit almost on top of each other (they do near a
+   cycle floor), so the 200w label goes below the rail instead of colliding */
+.cost-marker-200w .cost-marker-label { top: auto; bottom: -18px; }
 
 .cost-numbers {
   display: flex;

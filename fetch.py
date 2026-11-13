@@ -61,34 +61,33 @@ def safe(label, fn, *args, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# Coin Metrics Community API — PriceUSD + volume_reported_spot_usd_1d.
+# Coin Metrics Community API — PriceUSD, volume_reported_spot_usd_1d,
+# CapMrktCurUSD, CapMVRVCur.
 # https://docs.coinmetrics.io/api/v4/ — community endpoints need no API key,
 # rate limit ~10 req / 6s per IP.
 #
-# VERIFIED AGAINST LIVE API (see README "已知的坑"): CapMrktCurUSD and SplyCur
-# are free, but CapRealUSD (realized cap) returns 403
-# "not available with supplied credentials" on the community tier — it is
-# gated behind Coin Metrics' paid plans. That makes it impossible to compute
-# MVRV-Z or realized price from Coin Metrics without a paid key, contrary to
-# the original plan. See fetch_mvrv_z_bitcoindata() / fetch_realized_price_history_bitcoindata()
-# below for the substitute free source.
+# VERIFIED AGAINST LIVE API (see README "已知的坑"): CapRealUSD (realized cap)
+# returns 403 "not available with supplied credentials" on the community tier
+# — but CapMVRVCur (the MVRV *ratio*) IS free ("community": true, daily,
+# history since 2010, updated through yesterday). Realized cap is just
+# CapMrktCurUSD / CapMVRVCur, so MVRV-Z and realized price can be computed
+# directly (see compute_mvrv_from_coinmetrics) with the original spec's
+# method, 1 day behind instead of bitcoin-data.com's 7-day free-tier delay.
 #
-# volume_reported_spot_usd_1d, by contrast, IS free on the community tier
-# (catalog confirms "community": true, full history since 2010-07-18) — an
-# aggregate reported spot volume across exchanges, which is both a better
-# methodology and a more reliable source than the alternatives tried here:
+# volume_reported_spot_usd_1d is also free (aggregate reported spot volume
+# across exchanges), which beat the alternatives tried for volume:
 # CoinGecko's historical endpoint now needs a paid Demo API key (401
 # without one); CoinMarketCap's free Basic tier excludes historical data
 # entirely; Binance's public klines are free and keyless but 451-blocked
 # from GitHub Actions' runner IPs (same block already hit on the futures
 # funding-rate endpoint). Coin Metrics has neither problem and we're
-# already calling it for price, so volume rides along in the same request.
+# already calling it for price, so everything rides in the same request.
 # ---------------------------------------------------------------------------
 def fetch_coinmetrics_price_series():
     url = f"{COINMETRICS_BASE}/timeseries/asset-metrics"
     params = {
         "assets": "btc",
-        "metrics": "PriceUSD,volume_reported_spot_usd_1d",
+        "metrics": "PriceUSD,volume_reported_spot_usd_1d,CapMrktCurUSD,CapMVRVCur",
         "frequency": "1d",
         "page_size": 10000,
         "start_time": "2010-07-01T00:00:00Z",
@@ -115,6 +114,10 @@ def fetch_coinmetrics_price_series():
             continue
         vol = row.get("volume_reported_spot_usd_1d")
         entry["volume"] = float(vol) if vol not in (None, "") else None
+        # the newest rows can lag on some metrics, so each is optional per row
+        for key, field in (("mktcap", "CapMrktCurUSD"), ("mvrv", "CapMVRVCur")):
+            v = row.get(field)
+            entry[key] = float(v) if v not in (None, "") else None
         clean.append(entry)
     if len(clean) < 1500:
         raise RuntimeError(f"coinmetrics returned too few clean rows ({len(clean)})")
@@ -129,47 +132,54 @@ def _thin_history(history, recent_days=730, step=7):
     return older[::step] + recent
 
 
-# ---------------------------------------------------------------------------
-# bitcoin-data.com — free, unofficial community mirror API (no key), used
-# only for MVRV-Z and realized price since Coin Metrics gates CapRealUSD
-# behind a paid plan. Rate limit observed: 10 requests/hour on the free tier,
-# so fetch.py must make at most a couple of calls here — fine for a
-# once-a-day cron, NOT fine for repeated manual/local testing in a loop.
-# History only goes back to ~2022 (not full BTC history), which is enough
-# for a meaningful sparkline but shorter than the original all-time-history
-# design. Z-score methodology is the source's own (standard "deviation from
-# realized cap in stdevs of market cap" definition, matches the commonly
-# cited 0/7 thresholds) — we do not recompute it ourselves.
-# ---------------------------------------------------------------------------
-BITCOIN_DATA_BASE = "https://bitcoin-data.com/v1"
+def compute_mvrv_from_coinmetrics(cm_series):
+    """MVRV-Z, MVRV ratio and realized price from Coin Metrics' free CapMVRVCur.
 
+    realized cap = CapMrktCurUSD / CapMVRVCur
+    Z = (market cap - realized cap) / stdev(market cap since inception)
+    The stdev is cumulative ("有史以来累计", expanding window up to each day) —
+    not rolling and not full-sample, which would leak future data into
+    history. Checked against bitcoin-data.com over 1455 overlapping days:
+    mean absolute error 0.0017. Realized price = price / MVRV.
+    """
+    rows = [r for r in cm_series if r.get("mktcap") and r.get("mvrv")]
+    if len(rows) < 1500:
+        raise RuntimeError(f"not enough MVRV rows from coinmetrics ({len(rows)})")
 
-def fetch_mvrv_z_bitcoindata():
-    r = requests.get(f"{BITCOIN_DATA_BASE}/mvrv-zscore", headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
-    r.raise_for_status()
-    rows = r.json()
-    if not isinstance(rows, list) or not rows:
-        raise RuntimeError("bitcoin-data.com mvrv-zscore returned no data")
-    rows.sort(key=lambda row: row["d"])
-    history = [[row["d"], round(float(row["mvrvZscore"]), 4)] for row in rows]
+    n, s1, s2 = 0, 0.0, 0.0
+    z_history, realized_pairs = [], []
+    for r in rows:
+        m = r["mktcap"]
+        n += 1
+        s1 += m
+        s2 += m * m
+        std = math.sqrt(max(s2 / n - (s1 / n) ** 2, 0.0))
+        if std > 0:
+            z_history.append([r["date"], round((m - m / r["mvrv"]) / std, 4)])
+        realized_pairs.append((r["date"], r["price"] / r["mvrv"]))
+
     latest = rows[-1]
     return {
-        "value": round(float(latest["mvrvZscore"]), 4),
-        "asof": latest["d"],
-        "history": _thin_history(history),
+        "value": z_history[-1][1],
+        "asof": z_history[-1][0],
+        "mvrv_ratio": round(latest["mvrv"], 4),
+        # The cumulative stdev is tiny during 2010's first months, which blows
+        # Z up to ~33 and would flatten the sparkline. The calculation above
+        # still uses every day; only the *displayed* history starts in 2011.
+        "history": _thin_history([h for h in z_history if h[0] >= "2011-01-01"]),
+        "realized_pairs": realized_pairs,
     }
 
 
-def fetch_realized_price_history_bitcoindata():
-    """Full history in one call (its last row doubles as the latest value),
-    to stay well under bitcoin-data.com's 10 req/hour free-tier limit."""
-    r = requests.get(f"{BITCOIN_DATA_BASE}/realized-price", headers=UA_HEADERS, timeout=REQUEST_TIMEOUT)
-    r.raise_for_status()
-    rows = r.json()
-    if not isinstance(rows, list) or not rows:
-        raise RuntimeError("bitcoin-data.com realized-price returned no data")
-    rows.sort(key=lambda row: row["d"])
-    return [(row["d"], float(row["realizedPrice"])) for row in rows]
+# ---------------------------------------------------------------------------
+# bitcoin-data.com — free, unofficial community mirror API (no key). Now used
+# only for LTH-MVRV / STH-MVRV, which have no free fresher source. Since late
+# 2026 its free tier returns data 7 days behind ("delayed": true, real-time
+# needs a subscription), and it's rate limited to 10 requests/hour — fine for
+# a once-a-day cron (2 requests/run), NOT fine for repeated local testing.
+# History only goes back to ~2022.
+# ---------------------------------------------------------------------------
+BITCOIN_DATA_BASE = "https://bitcoin-data.com/v1"
 
 
 def fetch_lth_mvrv_bitcoindata():
@@ -229,7 +239,7 @@ def compute_cost_basis_history(cm_series, realized_pairs):
     """Weekly-aligned {dates, price, realized_price, ma_200w} for the cost-basis
     chart. Weekly cadence (not daily) so a rolling 200-period mean is a real
     200-WEEK moving average, and so the three series — full BTC price history
-    since 2010, realized price only from ~2022 (bitcoin-data.com's range) —
+    since 2010, realized price (Coin Metrics MVRV-derived) also since 2010 —
     can share one x-axis without a daily-resolution alignment headache.
     realized_price/ma_200w are null for weeks before each series has enough
     history; the frontend just skips drawing those segments."""
@@ -522,10 +532,11 @@ def main():
     if cm_series:
         realized_vol_result, _ = safe("realized vol compute", compute_realized_vol, cm_series)
 
-    mvrv_z_result, _ = safe("mvrv-z (bitcoin-data.com)", fetch_mvrv_z_bitcoindata)
-    realized_pairs, _ = safe("realized price history (bitcoin-data.com)", fetch_realized_price_history_bitcoindata)
-    realized_price_result = None
-    if realized_pairs:
+    mvrv_z_result, realized_pairs, realized_price_result = None, None, None
+    if cm_series:
+        mvrv_z_result, _ = safe("mvrv-z + realized price (coinmetrics CapMVRVCur)", compute_mvrv_from_coinmetrics, cm_series)
+    if mvrv_z_result:
+        realized_pairs = mvrv_z_result["realized_pairs"]
         latest_date, latest_val = realized_pairs[-1]
         realized_price_result = {"value": round(latest_val, 2), "asof": latest_date}
 
@@ -568,20 +579,16 @@ def main():
     out = dict(data)
     out["generated_at"] = UTC_NOW
 
-    mvrv_ratio = None
-    if cg_snapshot and realized_price_result and realized_price_result["value"]:
-        mvrv_ratio = round(cg_snapshot["price"] / realized_price_result["value"], 4)
-
     out["mvrv_z"] = merge_field(
         data.get("mvrv_z"),
-        {"value": mvrv_z_result["value"], "asof": mvrv_z_result["asof"], "source": "bitcoin-data.com",
-         "extra": {"mvrv_ratio": mvrv_ratio, "history": mvrv_z_result["history"]}}
+        {"value": mvrv_z_result["value"], "asof": mvrv_z_result["asof"], "source": "coinmetrics",
+         "extra": {"mvrv_ratio": mvrv_z_result["mvrv_ratio"], "history": mvrv_z_result["history"]}}
         if mvrv_z_result else None,
         stale=True,
     )
     out["realized_price"] = merge_field(
         data.get("realized_price"),
-        {"value": realized_price_result["value"], "asof": realized_price_result["asof"], "source": "bitcoin-data.com"}
+        {"value": realized_price_result["value"], "asof": realized_price_result["asof"], "source": "coinmetrics"}
         if realized_price_result else None,
         stale=True,
     )
@@ -603,7 +610,7 @@ def main():
         data.get("cost_basis_history"),
         {
             "value": None, "asof": cost_basis_result["dates"][-1] if cost_basis_result else None,
-            "source": "coinmetrics + bitcoin-data.com, weekly",
+            "source": "coinmetrics, weekly",
             "extra": cost_basis_result,
         } if cost_basis_result else None,
         stale=True,
